@@ -1,0 +1,7 @@
+*.o
+libdamm*
+test_app
+gmon.out
+union_test
+multiply_test
+transpose_test
