@@ -31,7 +31,12 @@
 
 namespace damm
 {
-
+	enum TRIANGULAR
+	{
+		UPPER,
+		LOWER
+	};
+	
 	namespace tri
 	{
 		/**

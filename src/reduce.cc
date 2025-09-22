@@ -54,6 +54,20 @@
 		REDUCE_OP(reinterpret_cast<value<T>::type*>(&r), a0) \
 	}
 
+//Alternative version that operates on NxN tiles
+// #define AVX512_KERNEL(T, REG_T, MAC_T, STD_OP, REDUCE_OP) \
+// 	template <> \
+// 	void _reduce_block_avx512<T, std::STD_OP<>>(T* A, T& r) \
+// 	{ \
+// 		constexpr size_t N = static_cast<size_t>(S)/sizeof(T);
+// 		alignas(64) REG_T[N] a; \
+// 		static_for<N>([&]<auto i>()\
+// 		{
+// 			_MM512_LOAD_LINE_##MAC_T(reinterpret_cast<value<T>::type*>(A)+i*sizeof(T), a[i]); \
+// 		});
+// 		REDUCE_OP(reinterpret_cast<value<T>::type*>(&r), a) \
+// 	}
+
 namespace damm
 {
 	SSE_KERNEL(float, __m128, PS, plus, _MM_REDUCE_ADD_LINE_PS)

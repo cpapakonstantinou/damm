@@ -80,6 +80,7 @@ namespace damm
 				}
 	}
 
+
 	/**
 	 * \brief	Matrix multiplication using cache-blocked flat (1D) arrays.
 	 *
@@ -165,6 +166,7 @@ namespace damm
 		}, threads);
 	}
 
+
 	template <typename T, typename S>
 	void 
 	__multiply_block_simd(typename S::template register_t<T>* a, typename S::template register_t<T>* b, typename S::template register_t<T>* c);
@@ -186,50 +188,18 @@ namespace damm
 	 * \note		Strides not divisible by the SIMD width are handled, but may result in unaligned access and reduced performance.
 	 */
 	template <typename T, typename S>
-	inline __attribute__((always_inline))
 	void 
 	_multiply_block_simd(T* A, T* B, T* C, const size_t dA, const size_t dB, const size_t dC)
 	{
-		constexpr size_t N = S::template elements<T>();
-		alignas(S::bytes) typename S::template register_t<T> a[S::template elements<T>()];
-		alignas(S::bytes) typename S::template register_t<T> b[S::template elements<T>()];
-		alignas(S::bytes) typename S::template register_t<T> c[S::template elements<T>()];
+		typename S::template register_t<T> a[S::template elements<T>()];
+		typename S::template register_t<T> b[S::template elements<T>()];
+		typename S::template register_t<T> c[S::template elements<T>()];
 		load<T, S>(A, a, dA);
 		load<T, S>(B, b, dB);
 		load<T, S>(C, c, dC);
 		__multiply_block_simd<T, S>(a, b, c);
-
-		// Direct computation without loading A into registers
-		// static_for<N>([&]<auto i>() {
-		// 	static_for<N>([&]<auto k>() {
-		// 		// Load single element and broadcast
-		// 		T a_scalar = A[i * dA + k];
-		// 		typename S::template register_t<T> a_broadcast;
-				
-		// 		if constexpr (std::is_same_v<T, float>) 
-		// 		{
-		// 			a_broadcast = _mm512_set1_ps(a_scalar);
-		// 		} 
-		// 		else if constexpr (std::is_same_v<T, double>) 
-		// 		{
-		// 			a_broadcast = _mm512_set1_pd(a_scalar);
-		// 		}
-				
-		// 		// FMA
-		// 		if constexpr (std::is_same_v<T, float>) 
-		// 		{
-		// 			c[i] = _mm512_fmadd_ps(a_broadcast, b[k], c[i]);
-		// 		} 
-		// 		else if constexpr (std::is_same_v<T, double>) 
-		// 		{
-		// 			c[i] = _mm512_fmadd_pd(a_broadcast, b[k], c[i]);
-		// 		}
-		// 	});
-		// });
-
 		store<T, S>(C, c, dC);
 	}
-
 	/**
 	 * \brief	Multiply matrices using SIMD intrinsics (flat arrays).
 	 *
@@ -254,50 +224,64 @@ namespace damm
 	 * \note	Supports asymmetric matrices and non-divisible tile dimensions.
 	 * \note	This should always be used as the entry point for flat SIMD block multiply.
 	 */
-	template<typename T, typename S, const size_t threads = _threads>
+	template<typename T, typename S, const size_t block_size = _block_size, const size_t threads = _threads>
 	inline __attribute__((always_inline))
 	void
 	_multiply_simd(T* A, T* B, T* C, const size_t M, const size_t N, const size_t P)
 	{
 		constexpr size_t kernel_stride = S::template elements<T>();
-		
+
 		T* A0 = A;
 		T* B0 = B;
 		T* C0 = C;
 	
-		const size_t simd_rows_M = M - (M % kernel_stride);
-		const size_t simd_cols_P = P - (P % kernel_stride);
-		const size_t simd_inner_N = N - (N % kernel_stride);
-			
-		parallel_for(0, M / kernel_stride, 1, [&](size_t bi) 
+		const size_t kernel_M = M - (M % kernel_stride);
+		const size_t kernel_P = P - (P % kernel_stride);  
+		const size_t kernel_N = N - (N % kernel_stride);
+
+		parallel_for(0, M, block_size, 
+		[&](size_t i) 
 		{
-			size_t i = bi * kernel_stride;			
-			for (size_t j = 0; j + kernel_stride <= P; j += kernel_stride) 
-				for (size_t k = 0; k + kernel_stride <= N; k += kernel_stride) 
+			for (size_t j = 0; j < P; j += block_size) 
+			{
+				for (size_t k = 0; k < N; k += block_size) 
 				{
-					_multiply_block_simd<T, S>(&A0[i * N + k], &B0[j * N + k], &C0[i * P + j], N, N, P);
+					size_t block_M = std::min(block_size, M - i);
+					size_t block_P = std::min(block_size, P - j);
+					size_t block_N = std::min(block_size, N - k);
+					
+					size_t kernel_end_M = std::min(i + block_M, kernel_M);
+					size_t kernel_end_P = std::min(j + block_P, kernel_P);
+					size_t kernel_end_N = std::min(k + block_N, kernel_N);
+					
+					for (size_t ii = i; ii < kernel_end_M; ii += kernel_stride) 
+					{
+						for (size_t jj = j; jj < kernel_end_P; jj += kernel_stride) 
+						{
+							for (size_t kk = k; kk < kernel_end_N; kk += kernel_stride) 
+							{
+								_multiply_block_simd<T, S>(&A0[ii * N + kk], &B0[jj * N + kk], &C0[ii * P + jj], N, N, P);
+							}
+						}
+					}
 				}
+			}
 		}, threads);
 
-		// remainder rows in A
 		if (M % kernel_stride != 0) 
 		{
 			const size_t rem_rows = M % kernel_stride;
-			_multiply_block<T, true>(A, B, C, simd_rows_M, 0, 0, rem_rows, N, P);
+			_multiply_block<T, true>(A, B, C, kernel_M, 0, 0, rem_rows, N, P);
 		}
-
-		// remainder columns in B
 		if (P % kernel_stride != 0) 
 		{
 			const size_t rem_cols = P % kernel_stride;
-			_multiply_block<T, true>(A, B, C, 0, simd_cols_P, 0, simd_rows_M, N, rem_cols);
+			_multiply_block<T, true>(A, B, C, 0, kernel_P, 0, kernel_M, N, rem_cols);
 		}
-
-		// remainder columns of A and rows of B
 		if (N % kernel_stride != 0) 
 		{
 			const size_t rem_inner = N % kernel_stride;
-			_multiply_block<T, true>(A, B, C, 0, 0, simd_inner_N, simd_rows_M, rem_inner, simd_cols_P);
+			_multiply_block<T, true>(A, B, C, 0, 0, kernel_N, kernel_M, rem_inner, kernel_P);
 		}
 	}
 
@@ -325,7 +309,7 @@ namespace damm
 	 * \note	Fallback scalar multiply is used for remainder tiles.
 	 * \note	This should always be used as the entry point for 2D SIMD block multiply.
 	 */
-	template<typename T, typename S, const size_t threads = _threads> 
+	template<typename T, typename S, const size_t block_size = _block_size, const size_t threads = _threads> 
 	inline __attribute__((always_inline))
 	void
 	_multiply_simd(T** A, T** B, T** C, const size_t M, const size_t N, const size_t P)
@@ -336,38 +320,52 @@ namespace damm
 		T* B0 = &B[0][0];
 		T* C0 = &C[0][0];
 
-		const size_t simd_rows_M = M - (M % kernel_stride);
-		const size_t simd_cols_P = P - (P % kernel_stride);
-		const size_t simd_inner_N = N - (N % kernel_stride);
-			
-		parallel_for(0, M / kernel_stride, 1, [&](size_t bi) 
+		const size_t kernel_M = M - (M % kernel_stride);
+		const size_t kernel_P = P - (P % kernel_stride);  
+		const size_t kernel_N = N - (N % kernel_stride);
+
+		parallel_for(0, M, block_size, 
+		[&](size_t i) 
 		{
-			size_t i = bi * kernel_stride; 
-			for (size_t j = 0; j + kernel_stride <= P; j += kernel_stride) 
-				for (size_t k = 0; k + kernel_stride <= N; k += kernel_stride) 
+			for (size_t j = 0; j < P; j += block_size) 
+			{
+				for (size_t k = 0; k < N; k += block_size) 
 				{
-					_multiply_block_simd<T, S>(&A0[i * N + k], &B0[j * N + k], &C0[i * P + j], N, N, P);
+					size_t block_M = std::min(block_size, M - i);
+					size_t block_P = std::min(block_size, P - j);
+					size_t block_N = std::min(block_size, N - k);
+					
+					size_t kernel_end_M = std::min(i + block_M, kernel_M);
+					size_t kernel_end_P = std::min(j + block_P, kernel_P);
+					size_t kernel_end_N = std::min(k + block_N, kernel_N);
+					
+					for (size_t ii = i; ii < kernel_end_M; ii += kernel_stride) 
+					{
+						for (size_t jj = j; jj < kernel_end_P; jj += kernel_stride) 
+						{
+							for (size_t kk = k; kk < kernel_end_N; kk += kernel_stride) 
+							{
+								_multiply_block_simd<T, S>(&A0[ii * N + kk], &B0[jj * N + kk], &C0[ii * P + jj], N, N, P);
+							}
+						}
+					}
 				}
+			}
 		}, threads);
-		// remainder rows in A
 		if (M % kernel_stride != 0) 
 		{
 			const size_t rem_rows = M % kernel_stride;
-			_multiply_block<T, true>(A, B, C, simd_rows_M, 0, 0, rem_rows, N, P);	
+			_multiply_block<T, true>(A, B, C, kernel_M, 0, 0, rem_rows, N, P);
 		}
-
-		// remainder columns in B
 		if (P % kernel_stride != 0) 
 		{
 			const size_t rem_cols = P % kernel_stride;
-			_multiply_block<T, true>(A, B, C, 0, simd_cols_P, 0, simd_rows_M, N, rem_cols);
+			_multiply_block<T, true>(A, B, C, 0, kernel_P, 0, kernel_M, N, rem_cols);
 		}
-
-		// remainder columns of A and rows of B
 		if (N % kernel_stride != 0) 
 		{
 			const size_t rem_inner = N % kernel_stride;
-			_multiply_block<T, true>(A, B, C, 0, 0, simd_inner_N, simd_rows_M, rem_inner, simd_cols_P);
+			_multiply_block<T, true>(A, B, C, 0, 0, kernel_N, kernel_M, rem_inner, kernel_P);
 		}
 	}
 
@@ -384,7 +382,7 @@ namespace damm
 	 * the result matrix C will have dimensions M×P.
 	 *
 	 * \tparam T			Element type of the matrices (e.g., float, double).
-	 * \tparam S			SIMD instruction set to use (SSE, AVX, AVX512, or NONE).
+	 * \tparam S			c instruction set to use (SSE, AVX, AVX512, or NONE).
 	 * \tparam block_size	Size of square blocks for cache optimization (default: _block_size).
 	 * \tparam threads		Number of threads for parallel execution (default: _threads).
 	 *
@@ -421,7 +419,7 @@ namespace damm
 		if constexpr (std::is_same_v<S, NONE>) 
 			_multiply<T, true, block_size, threads>(A, Bt.get(), C, M, N, P);
 		else
-			_multiply_simd<T, S, threads>(A, Bt.get(), C, M, N, P);
+			_multiply_simd<T, S, block_size, threads>(A, Bt.get(), C, M, N, P);
 	}
 
 	/**
@@ -475,7 +473,7 @@ namespace damm
 		if constexpr (std::is_same_v<S, NONE>)
 			_multiply<T, true, block_size, threads>(A, Bt.get(), C, M, N, P);
 		else
-			_multiply_simd<T, S, threads>(A, Bt.get(), C, M, N, P);
+			_multiply_simd<T, S, block_size, threads>(A, Bt.get(), C, M, N, P);
 	}
 
 }//namespace damm

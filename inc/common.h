@@ -2,7 +2,7 @@
 #define __COMMON_H__
 /**
  * \file common.h
- * \brief common definitions for libmm 
+ * \brief common definitions for damm 
  * \author cpapakonstantinou
  * \date 2025
  **/
@@ -38,47 +38,48 @@
 
 namespace damm
 {
-	#define DAMM_THREADS 1
-	#define DAMM_BLOCK_SIZE 64
+	#ifndef DAMM_NUM_THREADS
+		#define DAMM_NUM_THREADS 4
+	#endif
 
-	static constexpr size_t _threads = DAMM_THREADS; ///< Set to equivalent of hardware_concurrency() at compile time
-	static constexpr size_t _block_size = DAMM_BLOCK_SIZE; ///< Set to L1 cache line size at compile time
+	#ifndef DAMM_BLOCK_SIZE
+		#define DAMM_BLOCK_SIZE 256
+	#endif
 
-	/**
-	 * \brief The register size in bytes for a given SIMD architecture.
-	 * 
-	 *  This enumeration is used to instantiate / branch templates for the SIMD architecture.
-	 **/ 
-	enum SIMD
+	static constexpr size_t _threads = DAMM_NUM_THREADS; ///< Set to equivalent of hardware_concurrency() at compile time
+	static constexpr size_t _block_size = DAMM_BLOCK_SIZE; ///< Set to L1 cache block size at compile time	
+	// static constexpr size_t _line_size = DAMM_LINE_SIZE; ///< Set to L1 cache line size at compile time
+
+	/** \brief runtime support for setting threads with environment variable
+	 * \note may be desirable for future revision which wants environment based control.  
+	inline size_t threads() 
 	{
-		NONE = 8,
-		SSE = 16,
-		AVX = 32,
-		AVX512 = 64
-	};
-
-	// Compile-time SIMD detection
-	consteval SIMD detect_simd() 
-	{
-		#ifdef __AVX512F__
-			return SIMD::AVX512;
-		#elif defined(__AVX__)
-			return SIMD::AVX;
-		#elif defined(__SSE__)
-			return SIMD::SSE;
-		#else
-			return SIMD::NONE;
-		#endif
+		static size_t _threads = 0;
+		if ( _threads == 0) 
+		{
+			// Check environment first
+			const char* env_damm = std::getenv("DAMM_NUM_THREADS");    
+			if (env_damm) 
+			{
+				_threads = std::max(1, std::atoi(env_damm));
+			} 
+			else 
+			{
+				_threads = std::thread::hardware_concurrency();
+			}
+		}
+		return _threads;
 	}
+	*/
 
 	template <typename T>
-	struct value 
+	struct base 
 	{
 		using type = T;
 	};
 
 	template <typename T>
-	struct value<std::complex<T>> 
+	struct base<std::complex<T>> 
 	{
 		using type = T;
 	};
@@ -92,12 +93,6 @@ namespace damm
 			return sizeof(typename T::value_type);
 		else return sizeof(T);
 	}
-
-	enum TRIANGULAR
-	{
-		UPPER,
-		LOWER
-	};
 
 	/**
 	 \brief Create a 2D row-major view from a flat contiguous memory block.
@@ -324,6 +319,16 @@ namespace damm
 			threads,
 			std::forward<P>(progress)
 		);
+	}
+
+	template<auto N, typename F>
+	constexpr void
+	static_for(F&& func) noexcept 
+	{
+		[&]<std::size_t... Is>(std::index_sequence<Is...>) 
+		{ 
+			(func.template operator()<Is>(), ...); 
+		}(std::make_index_sequence<N>{});
 	}
 
 	template<typename T>

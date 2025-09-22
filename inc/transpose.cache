@@ -28,7 +28,6 @@
 // THE SOFTWARE.
 
 #include <common.h>
-#include <simd.h>
 
 namespace damm
 {
@@ -57,10 +56,10 @@ namespace damm
 	/**
 	 * \brief Transpose a matrix using a blocked and parallel strategy.
 	 *
-	 * This function performs a blocked (tiled) transpose of a row-major matrix  A 
-	 * into a row-major matrix  B. The matrix is processed in blocks of size 
-	 *  block_size × block_size to improve cache locality, particularly fitting 
-	 * blocks into L1 cache. The function supports multithreaded execution via  parallel_for.
+	 * This function performs a blocked (tiled) transpose of a row-major matrix \c A 
+	 * into a row-major matrix \c B. The matrix is processed in blocks of size 
+	 * \c block_size × block_size to improve cache locality, particularly fitting 
+	 * blocks into L1 cache. The function supports multithreaded execution via \c parallel_for.
 	 *
 	 * \tparam T			Element type of the matrices (e.g., float, double).
 	 * \tparam block_size	Size of the square block used in the tiling strategy.
@@ -71,10 +70,10 @@ namespace damm
 	 * \param M Mumber of rows in matrix A (and columns in matrix B).
 	 * \param N Mumber of columns in matrix A (and rows in matrix B).
 	 *
-	 * \note Both  A and  B must be allocated as contiguous 1D arrays in row-major layout.
+	 * \note Both \c A and \c B must be allocated as contiguous 1D arrays in row-major layout.
 	 * \note This function assumes both matrices are fully allocated (not submatrices).
-	 * \note Asymmetric matrices ( M ≠  N) and matrices whose dimensions are not multiples
-	 *       of  block_size are fully supported; partial edge blocks are handled correctly.
+	 * \note Asymmetric matrices (\c M ≠ \c N) and matrices whose dimensions are not multiples
+	 *       of \c block_size are fully supported; partial edge blocks are handled correctly.
 	 *
 	 */
 	template <typename T, const size_t block_size = _block_size, const size_t threads = _threads>
@@ -97,7 +96,7 @@ namespace damm
 	/**
 	 * \brief Transpose a matrix using a blocked and parallel strategy.
 	 *
-	 * This function performs a block-wise transpose of a matrix  A into  B,
+	 * This function performs a block-wise transpose of a matrix \c A into \c B,
 	 * optimizing for cache locality and enabling multithreaded execution. It operates
 	 * on matrix views that provide 2D access (e.g., row-major pointer-to-pointer layout),
 	 * typically created from contiguous memory.
@@ -111,7 +110,7 @@ namespace damm
 	 * \param M Mumber of rows in matrix A.
 	 * \param N Mumber of columns in matrix A.
 	 *
-	 * \note Both  A and  B must be valid 2D views over contiguous row-major memory.
+	 * \note Both \c A and \c B must be valid 2D views over contiguous row-major memory.
 	 *       This function assumes full allocation, not submatrices.
 	 * \note The transpose supports asymmetric matrices (N ≠ N) and dimensions
 	 *       that are not multiples of the block size.
@@ -134,179 +133,239 @@ namespace damm
 	}
 
 	/**
-	 * \brief Transpose a matrix block using intrinsics.
+	 * \brief Transpose a matrix block using SSE intrinsics.
 	 *
-	 * This function uses the intrinsic registers to perform a block transpose.
+	 * This function uses 128-bit SSE registers to perform a block transpose.
+	 * For \c float types, it effectively transposes 4x4 blocks in parallel.
+	 * For \c double types, it transposes 2x2 blocks in parallel.
 	 *
-	 * \tparam T		The scalar type.
-	 * \tparam S		The intrinsic type, SSE, AVX, or AVX512.
-	 * \param  r		Pointer to the source matrix block (stored in registers).
+	 * \tparam T		The scalar type, typically float or double.
+	 * \param A			Pointer to the source matrix block (row-major layout).
+	 * \param B			Pointer to the destination matrix block (row-major layout).
+	 * \param M			The leading dimension (stride) of \c A.
+	 * \param N			The leading dimension (stride) of \c B.
 	 *
-	 * \note Strides  M and  N not divisible by the SIMD block size may cause
+	 * \note Strides \c M and \c N not divisible by the SIMD block size may cause
 	 *       unaligned loads/stores, leading to performance penalties.
 	 */
-	template<typename T, typename S>
+	template <typename T>
+	void 
+	_transpose_block_sse(T* A, T* B, const size_t M, const size_t N);
+
+
+	/**
+	 * \brief Transpose a matrix block using AVX intrinsics.
+	 *
+	 * This function uses 256-bit AVX registers to perform a block transpose.
+	 * For \c float types, it transposes 8x8 blocks in parallel.
+	 * For \c double types, it transposes 4x4 blocks in parallel.
+	 *
+	 * \tparam T		The scalar type, typically float or double.
+	 * \param A			Pointer to the source matrix block (row-major layout).
+	 * \param B			Pointer to the destination matrix block (row-major layout).
+	 * \param M			The leading dimension (stride) of \c A.
+	 * \param N			The leading dimension (stride) of \c B.
+	 *
+	 * \note Strides \c M and \c N not divisible by the SIMD block size may cause
+	 *       unaligned loads/stores, leading to performance penalties.
+	 */
+	template <typename T>
 	void
-	__transpose_block_simd(typename S::template register_t<T>* r);
+	_transpose_block_avx(T* A, T* B, const size_t M, const size_t N);
+
+
+	/**
+	 * \brief Transpose a matrix block using AVX-512 intrinsics.
+	 *
+	 * This function uses 512-bit AVX-512 registers to perform a block transpose.
+	 * For \c float types, it transposes 16x16 blocks in parallel.
+	 * For \c double types, it transposes 8x8 blocks in parallel.
+	 *
+	 * \tparam T		The scalar type, typically float or double.
+	 * \param A			Pointer to the source matrix block (row-major layout).
+	 * \param B			Pointer to the destination matrix block (row-major layout).
+	 * \param M			The leading dimension (stride) of \c A.
+	 * \param N			The leading dimension (stride) of \c B.
+	 *
+	 * \note Strides \c M and \c N not divisible by the SIMD block size may cause
+	 *       unaligned loads/stores, leading to performance penalties.
+	 */
+	template <typename T>
+	void
+	_transpose_block_avx512(T* A, T* B, const size_t M, const size_t N);
 
 	/**
 	 * \brief Transpose a matrix block using SIMD intrinsics.
 	 *
-	 * 
-	 * \tparam T		The scalar data type of the matrix elements (e.g., float, double).
-	 * \tparam S		The SIMD instruction set tag (e.g., SSE, AVX, AVX512).
-	 * 
-	 * \param A 		Pointer to the input matrix  A stored in row-major order.
-	 * \param B			Pointer to the output matrix  B stored in row-major order.
-	 * \param dA		Stride of  A.
-	 * \param dB		Stride of  B.
-	 * 
-	 * \note Asymmetric matrices ( M !=  N) are supported without restrictions.
-	 * \note If  M or  N are not multiples of the SIMD register width, the implementation
-	 *       handles the remaining edge elements sequentially to ensure correctness.
-	 * \note Using strides not aligned to SIMD register sizes may cause unaligned memory
-	 *       accesses, potentially incurring performance penalties.
-	 */
-	template<typename T, typename S>
-	inline __attribute__((always_inline))
-	void
-	_transpose_block_simd(T* A, T* B, const size_t dA, const size_t dB)
-	{
-		alignas(S::bytes) typename S::template register_t<T> t[S::template elements<T>()];
-		load<T, S>(A, t, dA);
-		__transpose_block_simd<T, S>(t);
-		store<T, S>(B, t, dB);
-	}
-
-	/**
-	 * \brief Transpose a matrix using SIMD intrinsics.
-	 *
 	 * This function serves as the main entry point for SIMD-based block transposition.
-	 * The SIMD instruction set is specified via the template parameter  S, allowing
+	 * The SIMD instruction set is specified via the template parameter \c S, allowing
 	 * selection between SSE, AVX, AVX-512, or other SIMD types as implemented.
 	 * 
-	 * It efficiently transposes the matrix  A (with row-major layout) into  B, using
+	 * It efficiently transposes the matrix \c A (with row-major layout) into \c B, using
 	 * blocked operations optimized for the selected SIMD register width.
 	 * 
 	 * \tparam T		The scalar data type of the matrix elements (e.g., float, double).
 	 * \tparam S		The SIMD instruction set tag (e.g., SSE, AVX, AVX512).
-	 * \tparam thread	The number of threads to use for parallel execution (default:  _threads).
+	 * \tparam block_size	Size of square blocks for cache optimization (default: _block_size)
+	 * \tparam thread	The number of threads to use for parallel execution (default: \c _threads).
 	 * 
-	 * \param A_endPointer to the input matrix  A stored in row-major order.
-	 * \param B			 Pointer to the output matrix  B stored in row-major order.
-	 * \param M			 The rows of A and columns of B.
-	 * \param N			 The columns of A and rows of B.
+	 * \param A_endPointer to the input matrix \c A stored in row-major order.
+	 * \param B			 Pointer to the output matrix \c B stored in row-major order.
+	 * \param M			 The leading dimension (stride) of \c A.
+	 * \param N			 The leading dimension (stride) of \c B.
 	 * 
-	 * \note Asymmetric matrices ( M !=  N) are supported without restrictions.
-	 * \note If  M or  N are not multiples of the SIMD register width, the implementation
+	 * \note Asymmetric matrices (\c M != \c N) are supported without restrictions.
+	 * \note If \c M or \c N are not multiples of the SIMD register width, the implementation
 	 *       handles the remaining edge elements sequentially to ensure correctness.
 	 * \note Using strides not aligned to SIMD register sizes may cause unaligned memory
 	 *       accesses, potentially incurring performance penalties.
 	 */
-	template<typename T, typename S, const size_t threads = _threads> 
+	template<typename T, SIMD S, const size_t block_size = _block_size, const size_t threads = _threads> 
 	inline __attribute__((always_inline))
 	void
 	_transpose_simd(T* A, T* B, const size_t M, const size_t N)
 	{
-		constexpr size_t kernel_stride = S::template elements<T>();
-
-		const size_t simd_rows = M - (M % kernel_stride);
-		const size_t simd_cols = N - (N % kernel_stride);
-
-		parallel_for(0, M / kernel_stride, 1, 
-			[&](size_t bi) 
-			{
-				size_t i = bi * kernel_stride;
-				for (size_t j = 0; j + kernel_stride <= N; j += kernel_stride) 
-						_transpose_block_simd<T, S>(&A[i * N + j], &B[j * M + i], N, M);  // Fixed: swapped M and N
-			}, threads);
+		constexpr size_t kernel_stride = static_cast<size_t>(S/sizeof(T));
 		
-		// Handle remaining rows
+		const size_t kernel_M = M - (M % kernel_stride);
+		const size_t kernel_N = N - (N % kernel_stride);
+		
+		parallel_for(0, M, block_size, 
+		[&](size_t i) 
+		{
+			for (size_t j = 0; j < N; j += block_size) 
+			{
+				size_t block_M = std::min(block_size, M - i);
+				size_t block_N = std::min(block_size, N - j);
+				
+				size_t kernel_end_M = std::min(i + block_M, kernel_M);
+				size_t kernel_end_N = std::min(j + block_N, kernel_N);
+				
+				for (size_t ii = i; ii < kernel_end_M; ii += kernel_stride) 
+				{
+					for (size_t jj = j; jj < kernel_end_N; jj += kernel_stride) 
+					{
+						if constexpr (S == SSE)
+							_transpose_block_sse<T>(&A[ii * N + jj], &B[jj * M + ii], M, N);
+						if constexpr (S == AVX)
+							_transpose_block_avx<T>(&A[ii * N + jj], &B[jj * M + ii], M, N);
+						if constexpr (S == AVX512)
+							_transpose_block_avx512<T>(&A[ii * N + jj], &B[jj * M + ii], M, N);
+					}
+				}
+			}
+		}, threads);
+		
+		// Handle remainder rows
 		if (M % kernel_stride != 0) 
 		{
 			size_t rem = M % kernel_stride;
-			for (size_t j = 0; j < simd_cols; j += kernel_stride)
-				_transpose_block(A, B, simd_rows, j, rem, kernel_stride);
+			for (size_t j = 0; j < kernel_N; j += kernel_stride)
+				_transpose_block<T>(A, B, kernel_M, j, rem, kernel_stride);
 		}
-
-		// Handle remaining columns
+		
+		// Handle remainder columns
 		if (N % kernel_stride != 0)
 		{
 			size_t rem = N % kernel_stride;
-			for (size_t i = 0; i < simd_rows; i += kernel_stride)
-				_transpose_block(A, B, i, simd_cols, kernel_stride, rem);
+			for (size_t i = 0; i < kernel_M; i += kernel_stride)
+				_transpose_block<T>(A, B, i, kernel_N, kernel_stride, rem);
 		}
-
+		
 		// Handle remaining rows and columns
 		if ((M % kernel_stride != 0) && (N % kernel_stride != 0))
 		{
-			_transpose_block(A, B, simd_rows, simd_cols, M % kernel_stride, N % kernel_stride);
-		}	
+			_transpose_block<T>(A, B, kernel_M, kernel_N, M % kernel_stride, N % kernel_stride);
+		}
 	}
+
 	/**
 	 * \brief Transpose a matrix block using SIMD intrinsics.
 	 *
 	 * This function serves as the main entry point for SIMD-based block transposition.
-	 * The SIMD instruction set is specified via the template parameter  S, allowing
+	 * The SIMD instruction set is specified via the template parameter \c S, allowing
 	 * selection between SSE, AVX, AVX-512, or other SIMD types as implemented.
 	 * 
-	 * It efficiently transposes the matrix  A (with row-major layout) into  B, using
+	 * It efficiently transposes the matrix \c A (with row-major layout) into \c B, using
 	 * blocked operations optimized for the selected SIMD register width.
 	 * 
 	 * \tparam T		The scalar data type of the matrix elements (e.g., float, double).
 	 * \tparam S		The SIMD instruction set tag (e.g., SSE, AVX, AVX512).
-	 * \tparam thread	The number of threads to use for parallel execution (default:  _threads).
+ 	 * \tparam block_size	Size of square blocks for cache optimization (default: _block_size)
+	 * \tparam thread	The number of threads to use for parallel execution (default: \c _threads).
 	 * 
-	 * \param A			 Pointer to the input matrix  A stored in row-major order.
-	 * \param B			 Pointer to the output matrix  B stored in row-major order.
-	 * \param M			 The leading dimension (stride) of  A.
-	 * \param N			 The leading dimension (stride) of  B.
+	 * \param A			 Pointer to the input matrix \c A stored in row-major order.
+	 * \param B			 Pointer to the output matrix \c B stored in row-major order.
+	 * \param M			 The leading dimension (stride) of \c A.
+	 * \param N			 The leading dimension (stride) of \c B.
 	 * 
-	 * \note Asymmetric matrices ( M !=  N) are supported without restrictions.
-	 * \note If  M or  N are not multiples of the SIMD register width, the implementation
+	 * \note Asymmetric matrices (\c M != \c N) are supported without restrictions.
+	 * \note If \c M or \c N are not multiples of the SIMD register width, the implementation
 	 *       handles the remaining edge elements sequentially to ensure correctness.
 	 * \note Using strides not aligned to SIMD register sizes may cause unaligned memory
 	 *       accesses, potentially incurring performance penalties.
 	 */
-	template<typename T, typename S, const size_t threads = _threads> 
+	template<typename T, SIMD S, const size_t block_size = _block_size, const size_t threads = _threads>
 	inline __attribute__((always_inline))
 	void
 	_transpose_simd(T** A, T** B, const size_t M, const size_t N)
 	{
-		constexpr size_t kernel_stride = S::template elements<T>();
-
 		T* A0 = &A[0][0];
 		T* B0 = &B[0][0];
+		
+		constexpr size_t kernel_stride = static_cast<size_t>(S/sizeof(T));
 
-		const size_t simd_rows = M - (M % kernel_stride);
-		const size_t simd_cols = N - (N % kernel_stride);
-
-		parallel_for(0, M / kernel_stride, 1, 
-			[&](size_t bi) 
+		const size_t kernel_M = M - (M % kernel_stride);
+		const size_t kernel_N = N - (N % kernel_stride);
+		
+		parallel_for(0, M, block_size, 
+		[&](size_t i) 
+		{
+			for (size_t j = 0; j < N; j += block_size) 
 			{
-				size_t i = bi * kernel_stride;
-				for (size_t j = 0; j + kernel_stride <= N; j += kernel_stride) 
-					_transpose_block_simd<T, S>(&A0[i * N + j], &B0[j * M + i], N, M);
-			}, threads);
-
+				size_t block_M = std::min(block_size, M - i);
+				size_t block_N = std::min(block_size, N - j);
+				
+				size_t kernel_end_M = std::min(i + block_M, kernel_M);
+				size_t kernel_end_N = std::min(j + block_N, kernel_N);
+				
+				for (size_t ii = i; ii < kernel_end_M; ii += kernel_stride) 
+				{
+					for (size_t jj = j; jj < kernel_end_N; jj += kernel_stride) 
+					{
+						if constexpr (S == SSE)
+							_transpose_block_sse<T>(&A0[ii * N + jj], &B0[jj * M + ii], M, N);
+						if constexpr (S == AVX)
+							_transpose_block_avx<T>(&A0[ii * N + jj], &B0[jj * M + ii], M, N);
+						if constexpr (S == AVX512)
+							_transpose_block_avx512<T>(&A0[ii * N + jj], &B0[jj * M + ii], M, N);
+					}
+				}
+			}
+		}, threads);
+		
+		// Handle remainder rows
 		if (M % kernel_stride != 0) 
 		{
 			size_t rem = M % kernel_stride;
-			for (size_t j = 0; j < simd_cols; j += kernel_stride)
-				_transpose_block<T>(A, B, simd_rows, j, rem, kernel_stride);
+			for (size_t j = 0; j < kernel_N; j += kernel_stride)
+				_transpose_block<T>(A, B, kernel_M, j, rem, kernel_stride);
 		}
-
+		
+		// Handle remainder columns
 		if (N % kernel_stride != 0)
 		{
 			size_t rem = N % kernel_stride;
-			for (size_t i = 0; i < simd_rows; i += kernel_stride)
-				_transpose_block<T>(A, B, i, simd_cols, kernel_stride, rem);
+			for (size_t i = 0; i < kernel_M; i += kernel_stride)
+				_transpose_block<T>(A, B, i, kernel_N, kernel_stride, rem);
 		}
-
+		
+		// Handle remaining rows and columns
 		if ((M % kernel_stride != 0) && (N % kernel_stride != 0))
 		{
-			_transpose_block<T>(A, B, simd_rows, simd_cols, M % kernel_stride, N % kernel_stride);
+			_transpose_block<T>(A, B, kernel_M, kernel_N, M % kernel_stride, N % kernel_stride);
 		}
+
 	}
 
 	/**
@@ -340,16 +399,16 @@ namespace damm
 	 * \throws std::invalid_argument if either A or B is null.
 	 * \throws std::runtime_error if memory layout validation fails.
 	 */
-	template<typename T,  typename S = decltype(detect_simd()), const size_t block_size = _block_size, const size_t threads = _threads>
+	template<typename T,  SIMD S = detect_simd(), const size_t block_size = _block_size, const size_t threads = _threads>
 	inline 
 	void transpose(T** A, T** B, const size_t M, const size_t N)
 	{
 		right<T>("transpose:", std::make_tuple(A, M, N), std::make_tuple(B, N, M));
 		
-		if constexpr (std::is_same_v<S, NONE>)
+		if constexpr (S == SIMD::NONE) 
 			_transpose<T, block_size, threads>(A, B, M, N);
 		else
-			_transpose_simd<T, S, threads>(A, B, M, N);
+			_transpose_simd<T, S, block_size, threads>(A, B, M, N);
 	}
 
 	/**
@@ -383,17 +442,17 @@ namespace damm
 	 * \throws std::invalid_argument if either A or B is null.
 	 * \throws std::runtime_error if memory layout validation fails.
 	 */
-	template<typename T,  typename S = decltype(detect_simd()), const size_t block_size = _block_size, const size_t threads = _threads>
+	template<typename T,  SIMD S = detect_simd(), const size_t block_size = _block_size, const size_t threads = _threads>
 	inline 
 	void transpose(T* A, T* B, const size_t M, const size_t N)
 	{
 		right<T>("transpose:", std::make_tuple(A, M, N), std::make_tuple(B, N, M));
 		
 		// Compile-time dispatch  
-		if constexpr (std::is_same_v<S, NONE>)
+		if constexpr (S == SIMD::NONE)
 			_transpose<T, block_size, threads>(A, B, M, N);
 		else
-			_transpose_simd<T, S, threads>(A, B, M, N);
+			_transpose_simd<T, S, block_size, threads>(A, B, M, N);
 	}
 
 }//namespace damm

@@ -32,7 +32,7 @@
 // Variations of this file can, and should exist for the target architecture
 // this version was developed on System: Intel Tiger Lake i7-1165G7
 // in practice we might have variants of this file
-// if cpu is ...
+// #if cpu is ...
 // #include macros_cpu_specific.h 
 
 
@@ -1356,6 +1356,1481 @@
 	_mm_store_pd(r, res); \
 }
 
+/* MATRIX-MATRIX MULTIPLY OPS */
+#define _MM_MMUL4_PS(a0, a1, a2, a3, b0, b1, b2, b3, c0, c1, c2, c3) \
+{\
+	alignas(16)__m128 t0, t1, t2, t3; \
+	\
+	t0 = _mm_dp_ps(a0, b0, 0xF1); \
+	t1 = _mm_dp_ps(a0, b1, 0xF2); \
+	t2 = _mm_dp_ps(a0, b2, 0xF4); \
+	t3 = _mm_dp_ps(a0, b3, 0xF8); \
+	t0 = _mm_add_ps(t0, t1); \
+	t0 = _mm_add_ps(t0, t2); \
+	t0 = _mm_add_ps(t0, t3); \
+	c0 = _mm_add_ps(c0, t0); \
+	\
+	t0 = _mm_dp_ps(a1, b0, 0xF1); \
+	t1 = _mm_dp_ps(a1, b1, 0xF2); \
+	t2 = _mm_dp_ps(a1, b2, 0xF4); \
+	t3 = _mm_dp_ps(a1, b3, 0xF8); \
+	t0 = _mm_add_ps(t0, t1); \
+	t0 = _mm_add_ps(t0, t2); \
+	t0 = _mm_add_ps(t0, t3); \
+	c1 = _mm_add_ps(c1, t0); \
+	\
+	t0 = _mm_dp_ps(a2, b0, 0xF1); \
+	t1 = _mm_dp_ps(a2, b1, 0xF2); \
+	t2 = _mm_dp_ps(a2, b2, 0xF4); \
+	t3 = _mm_dp_ps(a2, b3, 0xF8); \
+	t0 = _mm_add_ps(t0, t1); \
+	t0 = _mm_add_ps(t0, t2); \
+	t0 = _mm_add_ps(t0, t3); \
+	c2 = _mm_add_ps(c2, t0); \
+	\
+	t0 = _mm_dp_ps(a3, b0, 0xF1); \
+	t1 = _mm_dp_ps(a3, b1, 0xF2); \
+	t2 = _mm_dp_ps(a3, b2, 0xF4); \
+	t3 = _mm_dp_ps(a3, b3, 0xF8); \
+	t0 = _mm_add_ps(t0, t1); \
+	t0 = _mm_add_ps(t0, t2); \
+	t0 = _mm_add_ps(t0, t3); \
+	c3 = _mm_add_ps(c3, t0); \
+}
+
+#define _MM_MMUL2_PD(a0, a1, b0, b1, c0, c1) \
+{ \
+	alignas(16)__m128d t0, t1;\
+	t0 = _mm_dp_pd(a0, b0, 0x31);\
+	t1 = _mm_dp_pd(a0, b1, 0x31);\
+	c0 = _mm_add_pd(c0, _mm_unpacklo_pd(t0, t1));\
+	\
+	t0 = _mm_dp_pd(a1, b0, 0x31);\
+	t1 = _mm_dp_pd(a1, b1, 0x31);\
+	c1 = _mm_add_pd(c1, _mm_unpacklo_pd(t0, t1));\
+}
+
+#define _MM256_MMUL4_PD(a0, a1, a2, a3, b0, b1, b2, b3, c0, c1, c2, c3) \
+{ \
+	alignas(32)__m256d t0, t1, t2; \
+	alignas(32)__m256d m0, m1, m2, m3; \
+	\
+	m0 = _mm256_mul_pd(a0, b0); \
+	m1 = _mm256_mul_pd(a0, b1); \
+	m2 = _mm256_mul_pd(a0, b2); \
+	m3 = _mm256_mul_pd(a0, b3); \
+	t0 = _mm256_hadd_pd(m0, m1); \
+	t1 = _mm256_hadd_pd(m2, m3); \
+	t0 = _mm256_permute4x64_pd(t0, _MM_SHUFFLE(3, 1, 2, 0)); \
+	t1 = _mm256_permute4x64_pd(t1, _MM_SHUFFLE(3, 1, 2, 0)); \
+	t2 = _mm256_hadd_pd(t0, t1); \
+	t2 = _mm256_permute4x64_pd(t2, _MM_SHUFFLE(3, 1, 2, 0)); \
+	c0 = _mm256_add_pd(c0, t2); \
+	\
+	m0 = _mm256_mul_pd(a1, b0); \
+	m1 = _mm256_mul_pd(a1, b1); \
+	m2 = _mm256_mul_pd(a1, b2); \
+	m3 = _mm256_mul_pd(a1, b3); \
+	t0 = _mm256_hadd_pd(m0, m1); \
+	t1 = _mm256_hadd_pd(m2, m3); \
+	t0 = _mm256_permute4x64_pd(t0, _MM_SHUFFLE(3, 1, 2, 0)); \
+	t1 = _mm256_permute4x64_pd(t1, _MM_SHUFFLE(3, 1, 2, 0)); \
+	t2 = _mm256_hadd_pd(t0, t1); \
+	t2 = _mm256_permute4x64_pd(t2, _MM_SHUFFLE(3, 1, 2, 0)); \
+	c1 = _mm256_add_pd(c1, t2); \
+	\
+	m0 = _mm256_mul_pd(a2, b0); \
+	m1 = _mm256_mul_pd(a2, b1); \
+	m2 = _mm256_mul_pd(a2, b2); \
+	m3 = _mm256_mul_pd(a2, b3); \
+	t0 = _mm256_hadd_pd(m0, m1); \
+	t1 = _mm256_hadd_pd(m2, m3); \
+	t0 = _mm256_permute4x64_pd(t0, _MM_SHUFFLE(3, 1, 2, 0)); \
+	t1 = _mm256_permute4x64_pd(t1, _MM_SHUFFLE(3, 1, 2, 0)); \
+	t2 = _mm256_hadd_pd(t0, t1); \
+	t2 = _mm256_permute4x64_pd(t2, _MM_SHUFFLE(3, 1, 2, 0)); \
+	c2 = _mm256_add_pd(c2, t2); \
+	\
+	m0 = _mm256_mul_pd(a3, b0); \
+	m1 = _mm256_mul_pd(a3, b1); \
+	m2 = _mm256_mul_pd(a3, b2); \
+	m3 = _mm256_mul_pd(a3, b3); \
+	t0 = _mm256_hadd_pd(m0, m1); \
+	t1 = _mm256_hadd_pd(m2, m3); \
+	t0 = _mm256_permute4x64_pd(t0, _MM_SHUFFLE(3, 1, 2, 0)); \
+	t1 = _mm256_permute4x64_pd(t1, _MM_SHUFFLE(3, 1, 2, 0)); \
+	t2 = _mm256_hadd_pd(t0, t1); \
+	t2 = _mm256_permute4x64_pd(t2, _MM_SHUFFLE(3, 1, 2, 0)); \
+	c3 = _mm256_add_pd(c3, t2); \
+}
+
+#define _MM256_MMUL8_PS(a0, a1, a2, a3, a4, a5, a6, a7, b0, b1, b2, b3, b4, b5, b6, b7, c0, c1, c2, c3, c4, c5, c6, c7) \
+{ \
+	alignas(32)__m256 t0, t1, t2, t3;\
+	alignas(32)__m256 m0, m1, m2, m3, m4, m5, m6, m7;\
+	const __m256i p = _mm256_set_epi32(7, 6, 3, 2, 5, 4, 1, 0);\
+	\
+	m0 = _mm256_mul_ps(a0, b0);\
+	m1 = _mm256_mul_ps(a0, b1);\
+	m2 = _mm256_mul_ps(a0, b2);\
+	m3 = _mm256_mul_ps(a0, b3);\
+	m4 = _mm256_mul_ps(a0, b4);\
+	m5 = _mm256_mul_ps(a0, b5);\
+	m6 = _mm256_mul_ps(a0, b6);\
+	m7 = _mm256_mul_ps(a0, b7);\
+	\
+	t0 = _mm256_hadd_ps(m0, m1);\
+	t1 = _mm256_hadd_ps(m2, m3);\
+	t2 = _mm256_hadd_ps(m4, m5);\
+	t3 = _mm256_hadd_ps(m6, m7);\
+	\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	t2 = _mm256_permutevar8x32_ps(t2, p);\
+	t3 = _mm256_permutevar8x32_ps(t3, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t1 = _mm256_hadd_ps(t2, t3);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	\
+	c0 = _mm256_add_ps(c0, t0);\
+	\
+	m0 = _mm256_mul_ps(a1, b0);\
+	m1 = _mm256_mul_ps(a1, b1);\
+	m2 = _mm256_mul_ps(a1, b2);\
+	m3 = _mm256_mul_ps(a1, b3);\
+	m4 = _mm256_mul_ps(a1, b4);\
+	m5 = _mm256_mul_ps(a1, b5);\
+	m6 = _mm256_mul_ps(a1, b6);\
+	m7 = _mm256_mul_ps(a1, b7);\
+	\
+	t0 = _mm256_hadd_ps(m0, m1);\
+	t1 = _mm256_hadd_ps(m2, m3);\
+	t2 = _mm256_hadd_ps(m4, m5);\
+	t3 = _mm256_hadd_ps(m6, m7);\
+	\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	t2 = _mm256_permutevar8x32_ps(t2, p);\
+	t3 = _mm256_permutevar8x32_ps(t3, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t1 = _mm256_hadd_ps(t2, t3);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	\
+	c1 = _mm256_add_ps(c1, t0);\
+	\
+	m0 = _mm256_mul_ps(a2, b0);\
+	m1 = _mm256_mul_ps(a2, b1);\
+	m2 = _mm256_mul_ps(a2, b2);\
+	m3 = _mm256_mul_ps(a2, b3);\
+	m4 = _mm256_mul_ps(a2, b4);\
+	m5 = _mm256_mul_ps(a2, b5);\
+	m6 = _mm256_mul_ps(a2, b6);\
+	m7 = _mm256_mul_ps(a2, b7);\
+	\
+	t0 = _mm256_hadd_ps(m0, m1);\
+	t1 = _mm256_hadd_ps(m2, m3);\
+	t2 = _mm256_hadd_ps(m4, m5);\
+	t3 = _mm256_hadd_ps(m6, m7);\
+	\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	t2 = _mm256_permutevar8x32_ps(t2, p);\
+	t3 = _mm256_permutevar8x32_ps(t3, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t1 = _mm256_hadd_ps(t2, t3);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	\
+	c2 = _mm256_add_ps(c2, t0);\
+	\
+	m0 = _mm256_mul_ps(a3, b0);\
+	m1 = _mm256_mul_ps(a3, b1);\
+	m2 = _mm256_mul_ps(a3, b2);\
+	m3 = _mm256_mul_ps(a3, b3);\
+	m4 = _mm256_mul_ps(a3, b4);\
+	m5 = _mm256_mul_ps(a3, b5);\
+	m6 = _mm256_mul_ps(a3, b6);\
+	m7 = _mm256_mul_ps(a3, b7);\
+	\
+	t0 = _mm256_hadd_ps(m0, m1);\
+	t1 = _mm256_hadd_ps(m2, m3);\
+	t2 = _mm256_hadd_ps(m4, m5);\
+	t3 = _mm256_hadd_ps(m6, m7);\
+	\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	t2 = _mm256_permutevar8x32_ps(t2, p);\
+	t3 = _mm256_permutevar8x32_ps(t3, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t1 = _mm256_hadd_ps(t2, t3);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	\
+	c3 = _mm256_add_ps(c3, t0);\
+	\
+	m0 = _mm256_mul_ps(a4, b0);\
+	m1 = _mm256_mul_ps(a4, b1);\
+	m2 = _mm256_mul_ps(a4, b2);\
+	m3 = _mm256_mul_ps(a4, b3);\
+	m4 = _mm256_mul_ps(a4, b4);\
+	m5 = _mm256_mul_ps(a4, b5);\
+	m6 = _mm256_mul_ps(a4, b6);\
+	m7 = _mm256_mul_ps(a4, b7);\
+	\
+	t0 = _mm256_hadd_ps(m0, m1);\
+	t1 = _mm256_hadd_ps(m2, m3);\
+	t2 = _mm256_hadd_ps(m4, m5);\
+	t3 = _mm256_hadd_ps(m6, m7);\
+	\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	t2 = _mm256_permutevar8x32_ps(t2, p);\
+	t3 = _mm256_permutevar8x32_ps(t3, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t1 = _mm256_hadd_ps(t2, t3);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	\
+	c4 = _mm256_add_ps(c4, t0);\
+	\
+	m0 = _mm256_mul_ps(a5, b0);\
+	m1 = _mm256_mul_ps(a5, b1);\
+	m2 = _mm256_mul_ps(a5, b2);\
+	m3 = _mm256_mul_ps(a5, b3);\
+	m4 = _mm256_mul_ps(a5, b4);\
+	m5 = _mm256_mul_ps(a5, b5);\
+	m6 = _mm256_mul_ps(a5, b6);\
+	m7 = _mm256_mul_ps(a5, b7);\
+	\
+	t0 = _mm256_hadd_ps(m0, m1);\
+	t1 = _mm256_hadd_ps(m2, m3);\
+	t2 = _mm256_hadd_ps(m4, m5);\
+	t3 = _mm256_hadd_ps(m6, m7);\
+	\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	t2 = _mm256_permutevar8x32_ps(t2, p);\
+	t3 = _mm256_permutevar8x32_ps(t3, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t1 = _mm256_hadd_ps(t2, t3);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	\
+	c5 = _mm256_add_ps(c5, t0);\
+	\
+	m0 = _mm256_mul_ps(a6, b0);\
+	m1 = _mm256_mul_ps(a6, b1);\
+	m2 = _mm256_mul_ps(a6, b2);\
+	m3 = _mm256_mul_ps(a6, b3);\
+	m4 = _mm256_mul_ps(a6, b4);\
+	m5 = _mm256_mul_ps(a6, b5);\
+	m6 = _mm256_mul_ps(a6, b6);\
+	m7 = _mm256_mul_ps(a6, b7);\
+	\
+	t0 = _mm256_hadd_ps(m0, m1);\
+	t1 = _mm256_hadd_ps(m2, m3);\
+	t2 = _mm256_hadd_ps(m4, m5);\
+	t3 = _mm256_hadd_ps(m6, m7);\
+	\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	t2 = _mm256_permutevar8x32_ps(t2, p);\
+	t3 = _mm256_permutevar8x32_ps(t3, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t1 = _mm256_hadd_ps(t2, t3);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	\
+	c6 = _mm256_add_ps(c6, t0);\
+	\
+	m0 = _mm256_mul_ps(a7, b0);\
+	m1 = _mm256_mul_ps(a7, b1);\
+	m2 = _mm256_mul_ps(a7, b2);\
+	m3 = _mm256_mul_ps(a7, b3);\
+	m4 = _mm256_mul_ps(a7, b4);\
+	m5 = _mm256_mul_ps(a7, b5);\
+	m6 = _mm256_mul_ps(a7, b6);\
+	m7 = _mm256_mul_ps(a7, b7);\
+	\
+	t0 = _mm256_hadd_ps(m0, m1);\
+	t1 = _mm256_hadd_ps(m2, m3);\
+	t2 = _mm256_hadd_ps(m4, m5);\
+	t3 = _mm256_hadd_ps(m6, m7);\
+	\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	t2 = _mm256_permutevar8x32_ps(t2, p);\
+	t3 = _mm256_permutevar8x32_ps(t3, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t1 = _mm256_hadd_ps(t2, t3);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	t1 = _mm256_permutevar8x32_ps(t1, p);\
+	\
+	t0 = _mm256_hadd_ps(t0, t1);\
+	t0 = _mm256_permutevar8x32_ps(t0, p);\
+	\
+	c7 = _mm256_add_ps(c7, t0); \
+}
+
+#define _MM512_MREDUCE_PD(c0, c1, c2, c3, c4, c5, c6, c7, acc) \
+{ \
+	__m512d l1_01 = _mm512_add_pd( \
+		_mm512_shuffle_f64x2(c0, c1, 0x44), \
+		_mm512_shuffle_f64x2(c0, c1, 0xEE)); \
+	__m512d l1_23 = _mm512_add_pd( \
+		_mm512_shuffle_f64x2(c2, c3, 0x44), \
+		_mm512_shuffle_f64x2(c2, c3, 0xEE)); \
+	__m512d l1_45 = _mm512_add_pd( \
+		_mm512_shuffle_f64x2(c4, c5, 0x44), \
+		_mm512_shuffle_f64x2(c4, c5, 0xEE)); \
+	__m512d l1_67 = _mm512_add_pd( \
+		_mm512_shuffle_f64x2(c6, c7, 0x44), \
+		_mm512_shuffle_f64x2(c6, c7, 0xEE)); \
+	\
+	__m512d l2_0123 = _mm512_add_pd( \
+		_mm512_shuffle_f64x2(l1_01, l1_23, 0x88), \
+		_mm512_shuffle_f64x2(l1_01, l1_23, 0xDD));\
+	__m512d l2_4567 = _mm512_add_pd( \
+		_mm512_shuffle_f64x2(l1_45, l1_67, 0x88), \
+		_mm512_shuffle_f64x2(l1_45, l1_67, 0xDD)); \
+	\
+	__m512i idx_lo = _mm512_set_epi64(14, 12, 10, 8, 6, 4, 2, 0); \
+	__m512i idx_hi = _mm512_set_epi64(15, 13, 11, 9, 7, 5, 3, 1); \
+	\
+	__m512d temp_lo = _mm512_permutex2var_pd(l2_0123, idx_lo, l2_4567); \
+	__m512d temp_hi = _mm512_permutex2var_pd(l2_0123, idx_hi, l2_4567); \
+	\
+	acc = _mm512_add_pd(temp_lo, temp_hi); \
+}
+
+#define _MM512_MMUL8_PD(a0, a1, a2, a3, a4, a5, a6, a7, b0, b1, b2, b3, b4, b5, b6, b7, c0, c1, c2, c3, c4, c5, c6, c7) \
+{\
+	__m512d t0, t1, t2, t3, t4, t5, t6, t7, acc; \
+	\
+	t0 = _mm512_mul_pd(a0, b0); \
+	t1 = _mm512_mul_pd(a0, b1); \
+	t2 = _mm512_mul_pd(a0, b2); \
+	t3 = _mm512_mul_pd(a0, b3); \
+	t4 = _mm512_mul_pd(a0, b4); \
+	t5 = _mm512_mul_pd(a0, b5); \
+	t6 = _mm512_mul_pd(a0, b6); \
+	t7 = _mm512_mul_pd(a0, b7); \
+	\
+	_MM512_MREDUCE_PD(t0, t1, t2, t3, t4, t5, t6, t7, acc) \
+	c0 = _mm512_add_pd(c0, acc); \
+	\
+	t0 = _mm512_mul_pd(a1, b0); \
+	t1 = _mm512_mul_pd(a1, b1); \
+	t2 = _mm512_mul_pd(a1, b2); \
+	t3 = _mm512_mul_pd(a1, b3); \
+	t4 = _mm512_mul_pd(a1, b4); \
+	t5 = _mm512_mul_pd(a1, b5); \
+	t6 = _mm512_mul_pd(a1, b6); \
+	t7 = _mm512_mul_pd(a1, b7); \
+	\
+	_MM512_MREDUCE_PD(t0, t1, t2, t3, t4, t5, t6, t7, acc) \
+	c1 = _mm512_add_pd(c1, acc); \
+	\
+	t0 = _mm512_mul_pd(a2, b0); \
+	t1 = _mm512_mul_pd(a2, b1); \
+	t2 = _mm512_mul_pd(a2, b2); \
+	t3 = _mm512_mul_pd(a2, b3); \
+	t4 = _mm512_mul_pd(a2, b4); \
+	t5 = _mm512_mul_pd(a2, b5); \
+	t6 = _mm512_mul_pd(a2, b6); \
+	t7 = _mm512_mul_pd(a2, b7); \
+	\
+	_MM512_MREDUCE_PD(t0, t1, t2, t3, t4, t5, t6, t7, acc) \
+	c2 = _mm512_add_pd(c2, acc); \
+	\
+	t0 = _mm512_mul_pd(a3, b0); \
+	t1 = _mm512_mul_pd(a3, b1); \
+	t2 = _mm512_mul_pd(a3, b2); \
+	t3 = _mm512_mul_pd(a3, b3); \
+	t4 = _mm512_mul_pd(a3, b4); \
+	t5 = _mm512_mul_pd(a3, b5); \
+	t6 = _mm512_mul_pd(a3, b6); \
+	t7 = _mm512_mul_pd(a3, b7); \
+	\
+	_MM512_MREDUCE_PD(t0, t1, t2, t3, t4, t5, t6, t7, acc) \
+	c3 = _mm512_add_pd(c3, acc); \
+	\
+	t0 = _mm512_mul_pd(a4, b0); \
+	t1 = _mm512_mul_pd(a4, b1); \
+	t2 = _mm512_mul_pd(a4, b2); \
+	t3 = _mm512_mul_pd(a4, b3); \
+	t4 = _mm512_mul_pd(a4, b4); \
+	t5 = _mm512_mul_pd(a4, b5); \
+	t6 = _mm512_mul_pd(a4, b6); \
+	t7 = _mm512_mul_pd(a4, b7); \
+	\
+	_MM512_MREDUCE_PD(t0, t1, t2, t3, t4, t5, t6, t7, acc) \
+	c4 = _mm512_add_pd(c4, acc); \
+	\
+	t0 = _mm512_mul_pd(a5, b0); \
+	t1 = _mm512_mul_pd(a5, b1); \
+	t2 = _mm512_mul_pd(a5, b2); \
+	t3 = _mm512_mul_pd(a5, b3); \
+	t4 = _mm512_mul_pd(a5, b4); \
+	t5 = _mm512_mul_pd(a5, b5); \
+	t6 = _mm512_mul_pd(a5, b6); \
+	t7 = _mm512_mul_pd(a5, b7); \
+	\
+	_MM512_MREDUCE_PD(t0, t1, t2, t3, t4, t5, t6, t7, acc) \
+	c5 = _mm512_add_pd(c5, acc); \
+	\
+	t0 = _mm512_mul_pd(a6, b0); \
+	t1 = _mm512_mul_pd(a6, b1); \
+	t2 = _mm512_mul_pd(a6, b2); \
+	t3 = _mm512_mul_pd(a6, b3); \
+	t4 = _mm512_mul_pd(a6, b4); \
+	t5 = _mm512_mul_pd(a6, b5); \
+	t6 = _mm512_mul_pd(a6, b6); \
+	t7 = _mm512_mul_pd(a6, b7); \
+	\
+	_MM512_MREDUCE_PD(t0, t1, t2, t3, t4, t5, t6, t7, acc) \
+	c6 = _mm512_add_pd(c6, acc); \
+	\
+	t0 = _mm512_mul_pd(a7, b0); \
+	t1 = _mm512_mul_pd(a7, b1); \
+	t2 = _mm512_mul_pd(a7, b2); \
+	t3 = _mm512_mul_pd(a7, b3); \
+	t4 = _mm512_mul_pd(a7, b4); \
+	t5 = _mm512_mul_pd(a7, b5); \
+	t6 = _mm512_mul_pd(a7, b6); \
+	t7 = _mm512_mul_pd(a7, b7); \
+	\
+	_MM512_MREDUCE_PD(t0, t1, t2, t3, t4, t5, t6, t7, acc) \
+	c7 = _mm512_add_pd(c7, acc); \
+}
+
+#define _MM512_MREDUCE_PS(c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, ca, cb, cc, cd, ce, cf, acc) \
+{ \
+	/* Extract 256-bit halves from all 16 registers */ \
+	__m256 c0_lo = _mm512_castps512_ps256(c0), c0_hi = _mm512_extractf32x8_ps(c0, 1); \
+	__m256 c1_lo = _mm512_castps512_ps256(c1), c1_hi = _mm512_extractf32x8_ps(c1, 1); \
+	__m256 c2_lo = _mm512_castps512_ps256(c2), c2_hi = _mm512_extractf32x8_ps(c2, 1); \
+	__m256 c3_lo = _mm512_castps512_ps256(c3), c3_hi = _mm512_extractf32x8_ps(c3, 1); \
+	__m256 c4_lo = _mm512_castps512_ps256(c4), c4_hi = _mm512_extractf32x8_ps(c4, 1); \
+	__m256 c5_lo = _mm512_castps512_ps256(c5), c5_hi = _mm512_extractf32x8_ps(c5, 1); \
+	__m256 c6_lo = _mm512_castps512_ps256(c6), c6_hi = _mm512_extractf32x8_ps(c6, 1); \
+	__m256 c7_lo = _mm512_castps512_ps256(c7), c7_hi = _mm512_extractf32x8_ps(c7, 1); \
+	__m256 c8_lo = _mm512_castps512_ps256(c8), c8_hi = _mm512_extractf32x8_ps(c8, 1); \
+	__m256 c9_lo = _mm512_castps512_ps256(c9), c9_hi = _mm512_extractf32x8_ps(c9, 1); \
+	__m256 ca_lo = _mm512_castps512_ps256(ca), ca_hi = _mm512_extractf32x8_ps(ca, 1); \
+	__m256 cb_lo = _mm512_castps512_ps256(cb), cb_hi = _mm512_extractf32x8_ps(cb, 1); \
+	__m256 cc_lo = _mm512_castps512_ps256(cc), cc_hi = _mm512_extractf32x8_ps(cc, 1); \
+	__m256 cd_lo = _mm512_castps512_ps256(cd), cd_hi = _mm512_extractf32x8_ps(cd, 1); \
+	__m256 ce_lo = _mm512_castps512_ps256(ce), ce_hi = _mm512_extractf32x8_ps(ce, 1); \
+	__m256 cf_lo = _mm512_castps512_ps256(cf), cf_hi = _mm512_extractf32x8_ps(cf, 1); \
+	\
+	/* Stack adjacent pairs for first level of tree reduction */ \
+	__m512 stack01_lo = _mm512_insertf32x8(_mm512_castps256_ps512(c0_lo), c1_lo, 1); \
+	__m512 stack01_hi = _mm512_insertf32x8(_mm512_castps256_ps512(c0_hi), c1_hi, 1); \
+	__m512 stack23_lo = _mm512_insertf32x8(_mm512_castps256_ps512(c2_lo), c3_lo, 1); \
+	__m512 stack23_hi = _mm512_insertf32x8(_mm512_castps256_ps512(c2_hi), c3_hi, 1); \
+	__m512 stack45_lo = _mm512_insertf32x8(_mm512_castps256_ps512(c4_lo), c5_lo, 1); \
+	__m512 stack45_hi = _mm512_insertf32x8(_mm512_castps256_ps512(c4_hi), c5_hi, 1); \
+	__m512 stack67_lo = _mm512_insertf32x8(_mm512_castps256_ps512(c6_lo), c7_lo, 1); \
+	__m512 stack67_hi = _mm512_insertf32x8(_mm512_castps256_ps512(c6_hi), c7_hi, 1); \
+	__m512 stack89_lo = _mm512_insertf32x8(_mm512_castps256_ps512(c8_lo), c9_lo, 1); \
+	__m512 stack89_hi = _mm512_insertf32x8(_mm512_castps256_ps512(c8_hi), c9_hi, 1); \
+	__m512 stackab_lo = _mm512_insertf32x8(_mm512_castps256_ps512(ca_lo), cb_lo, 1); \
+	__m512 stackab_hi = _mm512_insertf32x8(_mm512_castps256_ps512(ca_hi), cb_hi, 1); \
+	__m512 stackcd_lo = _mm512_insertf32x8(_mm512_castps256_ps512(cc_lo), cd_lo, 1); \
+	__m512 stackcd_hi = _mm512_insertf32x8(_mm512_castps256_ps512(cc_hi), cd_hi, 1); \
+	__m512 stackef_lo = _mm512_insertf32x8(_mm512_castps256_ps512(ce_lo), cf_lo, 1); \
+	__m512 stackef_hi = _mm512_insertf32x8(_mm512_castps256_ps512(ce_hi), cf_hi, 1); \
+	\
+	/* First level reduction: add hi and lo parts */ \
+	__m512 level1_01 = _mm512_add_ps(stack01_lo, stack01_hi); \
+	__m512 level1_23 = _mm512_add_ps(stack23_lo, stack23_hi); \
+	__m512 level1_45 = _mm512_add_ps(stack45_lo, stack45_hi); \
+	__m512 level1_67 = _mm512_add_ps(stack67_lo, stack67_hi); \
+	__m512 level1_89 = _mm512_add_ps(stack89_lo, stack89_hi); \
+	__m512 level1_ab = _mm512_add_ps(stackab_lo, stackab_hi); \
+	__m512 level1_cd = _mm512_add_ps(stackcd_lo, stackcd_hi); \
+	__m512 level1_ef = _mm512_add_ps(stackef_lo, stackef_hi); \
+	\
+	/* Second level: combine pairs of pairs */ \
+	__m256 l1_01_lo = _mm512_castps512_ps256(level1_01), l1_01_hi = _mm512_extractf32x8_ps(level1_01, 1); \
+	__m256 l1_23_lo = _mm512_castps512_ps256(level1_23), l1_23_hi = _mm512_extractf32x8_ps(level1_23, 1); \
+	__m256 l1_45_lo = _mm512_castps512_ps256(level1_45), l1_45_hi = _mm512_extractf32x8_ps(level1_45, 1); \
+	__m256 l1_67_lo = _mm512_castps512_ps256(level1_67), l1_67_hi = _mm512_extractf32x8_ps(level1_67, 1); \
+	__m256 l1_89_lo = _mm512_castps512_ps256(level1_89), l1_89_hi = _mm512_extractf32x8_ps(level1_89, 1); \
+	__m256 l1_ab_lo = _mm512_castps512_ps256(level1_ab), l1_ab_hi = _mm512_extractf32x8_ps(level1_ab, 1); \
+	__m256 l1_cd_lo = _mm512_castps512_ps256(level1_cd), l1_cd_hi = _mm512_extractf32x8_ps(level1_cd, 1); \
+	__m256 l1_ef_lo = _mm512_castps512_ps256(level1_ef), l1_ef_hi = _mm512_extractf32x8_ps(level1_ef, 1); \
+	\
+	__m512 level2_0123 = _mm512_add_ps( \
+		_mm512_insertf32x8(_mm512_castps256_ps512(l1_01_lo), l1_23_lo, 1), \
+		_mm512_insertf32x8(_mm512_castps256_ps512(l1_01_hi), l1_23_hi, 1)); \
+	__m512 level2_4567 = _mm512_add_ps( \
+		_mm512_insertf32x8(_mm512_castps256_ps512(l1_45_lo), l1_67_lo, 1), \
+		_mm512_insertf32x8(_mm512_castps256_ps512(l1_45_hi), l1_67_hi, 1)); \
+	__m512 level2_89ab = _mm512_add_ps( \
+		_mm512_insertf32x8(_mm512_castps256_ps512(l1_89_lo), l1_ab_lo, 1), \
+		_mm512_insertf32x8(_mm512_castps256_ps512(l1_89_hi), l1_ab_hi, 1)); \
+	__m512 level2_cdef = _mm512_add_ps( \
+		_mm512_insertf32x8(_mm512_castps256_ps512(l1_cd_lo), l1_ef_lo, 1), \
+		_mm512_insertf32x8(_mm512_castps256_ps512(l1_cd_hi), l1_ef_hi, 1)); \
+	\
+	/* Third level: combine to get final 4 groups of 4 results each */ \
+	__m256 l2_0123_lo = _mm512_castps512_ps256(level2_0123), l2_0123_hi = _mm512_extractf32x8_ps(level2_0123, 1); \
+	__m256 l2_4567_lo = _mm512_castps512_ps256(level2_4567), l2_4567_hi = _mm512_extractf32x8_ps(level2_4567, 1); \
+	__m256 l2_89ab_lo = _mm512_castps512_ps256(level2_89ab), l2_89ab_hi = _mm512_extractf32x8_ps(level2_89ab, 1); \
+	__m256 l2_cdef_lo = _mm512_castps512_ps256(level2_cdef), l2_cdef_hi = _mm512_extractf32x8_ps(level2_cdef, 1); \
+	\
+	__m512 final_0to7 = _mm512_add_ps( \
+		_mm512_insertf32x8(_mm512_castps256_ps512(l2_0123_lo), l2_4567_lo, 1), \
+		_mm512_insertf32x8(_mm512_castps256_ps512(l2_0123_hi), l2_4567_hi, 1)); \
+	__m512 final_8tof = _mm512_add_ps( \
+		_mm512_insertf32x8(_mm512_castps256_ps512(l2_89ab_lo), l2_cdef_lo, 1), \
+		_mm512_insertf32x8(_mm512_castps256_ps512(l2_89ab_hi), l2_cdef_hi, 1)); \
+	\
+	/* Final rearrangement and permutation to get all 16 results */ \
+	__m512 result = _mm512_add_ps(final_0to7, final_8tof); \
+	__m512i perm_idx = _mm512_set_epi32(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0); \
+	result = _mm512_permutexvar_ps(perm_idx, result); \
+	\
+	acc = _mm512_add_ps(acc, result); \
+}
+
+#define _MM512_MMUL16_PS(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, aa, ab, ac, ad, ae, af, b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, ba, bb, bc, bd, be, bf, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, ca, cb, cc, cd, ce, cf) \
+{\
+	__m512 t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc; \
+	\
+	t0 = _mm512_mul_ps(a0, b0); \
+	t1 = _mm512_mul_ps(a0, b1); \
+	t2 = _mm512_mul_ps(a0, b2); \
+	t3 = _mm512_mul_ps(a0, b3); \
+	t4 = _mm512_mul_ps(a0, b4); \
+	t5 = _mm512_mul_ps(a0, b5); \
+	t6 = _mm512_mul_ps(a0, b6); \
+	t7 = _mm512_mul_ps(a0, b7); \
+	t8 = _mm512_mul_ps(a0, b8); \
+	t9 = _mm512_mul_ps(a0, b9); \
+	ta = _mm512_mul_ps(a0, ba); \
+	tb = _mm512_mul_ps(a0, bb); \
+	tc = _mm512_mul_ps(a0, bc); \
+	td = _mm512_mul_ps(a0, bd); \
+	te = _mm512_mul_ps(a0, be); \
+	tf = _mm512_mul_ps(a0, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	c0 = _mm512_add_ps(c0, acc); \
+	\
+	t0 = _mm512_mul_ps(a1, b0); \
+	t1 = _mm512_mul_ps(a1, b1); \
+	t2 = _mm512_mul_ps(a1, b2); \
+	t3 = _mm512_mul_ps(a1, b3); \
+	t4 = _mm512_mul_ps(a1, b4); \
+	t5 = _mm512_mul_ps(a1, b5); \
+	t6 = _mm512_mul_ps(a1, b6); \
+	t7 = _mm512_mul_ps(a1, b7); \
+	t8 = _mm512_mul_ps(a1, b8); \
+	t9 = _mm512_mul_ps(a1, b9); \
+	ta = _mm512_mul_ps(a1, ba); \
+	tb = _mm512_mul_ps(a1, bb); \
+	tc = _mm512_mul_ps(a1, bc); \
+	td = _mm512_mul_ps(a1, bd); \
+	te = _mm512_mul_ps(a1, be); \
+	tf = _mm512_mul_ps(a1, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	c1 = _mm512_add_ps(c1, acc); \
+	\
+	t0 = _mm512_mul_ps(a2, b0); \
+	t1 = _mm512_mul_ps(a2, b1); \
+	t2 = _mm512_mul_ps(a2, b2); \
+	t3 = _mm512_mul_ps(a2, b3); \
+	t4 = _mm512_mul_ps(a2, b4); \
+	t5 = _mm512_mul_ps(a2, b5); \
+	t6 = _mm512_mul_ps(a2, b6); \
+	t7 = _mm512_mul_ps(a2, b7); \
+	t8 = _mm512_mul_ps(a2, b8); \
+	t9 = _mm512_mul_ps(a2, b9); \
+	ta = _mm512_mul_ps(a2, ba); \
+	tb = _mm512_mul_ps(a2, bb); \
+	tc = _mm512_mul_ps(a2, bc); \
+	td = _mm512_mul_ps(a2, bd); \
+	te = _mm512_mul_ps(a2, be); \
+	tf = _mm512_mul_ps(a2, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	c2 = _mm512_add_ps(c2, acc); \
+	\
+	t0 = _mm512_mul_ps(a3, b0); \
+	t1 = _mm512_mul_ps(a3, b1); \
+	t2 = _mm512_mul_ps(a3, b2); \
+	t3 = _mm512_mul_ps(a3, b3); \
+	t4 = _mm512_mul_ps(a3, b4); \
+	t5 = _mm512_mul_ps(a3, b5); \
+	t6 = _mm512_mul_ps(a3, b6); \
+	t7 = _mm512_mul_ps(a3, b7); \
+	t8 = _mm512_mul_ps(a3, b8); \
+	t9 = _mm512_mul_ps(a3, b9); \
+	ta = _mm512_mul_ps(a3, ba); \
+	tb = _mm512_mul_ps(a3, bb); \
+	tc = _mm512_mul_ps(a3, bc); \
+	td = _mm512_mul_ps(a3, bd); \
+	te = _mm512_mul_ps(a3, be); \
+	tf = _mm512_mul_ps(a3, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	c3 = _mm512_add_ps(c3, acc); \
+	\
+	t0 = _mm512_mul_ps(a4, b0); \
+	t1 = _mm512_mul_ps(a4, b1); \
+	t2 = _mm512_mul_ps(a4, b2); \
+	t3 = _mm512_mul_ps(a4, b3); \
+	t4 = _mm512_mul_ps(a4, b4); \
+	t5 = _mm512_mul_ps(a4, b5); \
+	t6 = _mm512_mul_ps(a4, b6); \
+	t7 = _mm512_mul_ps(a4, b7); \
+	t8 = _mm512_mul_ps(a4, b8); \
+	t9 = _mm512_mul_ps(a4, b9); \
+	ta = _mm512_mul_ps(a4, ba); \
+	tb = _mm512_mul_ps(a4, bb); \
+	tc = _mm512_mul_ps(a4, bc); \
+	td = _mm512_mul_ps(a4, bd); \
+	te = _mm512_mul_ps(a4, be); \
+	tf = _mm512_mul_ps(a4, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	c4 = _mm512_add_ps(c4, acc); \
+	\
+	t0 = _mm512_mul_ps(a5, b0); \
+	t1 = _mm512_mul_ps(a5, b1); \
+	t2 = _mm512_mul_ps(a5, b2); \
+	t3 = _mm512_mul_ps(a5, b3); \
+	t4 = _mm512_mul_ps(a5, b4); \
+	t5 = _mm512_mul_ps(a5, b5); \
+	t6 = _mm512_mul_ps(a5, b6); \
+	t7 = _mm512_mul_ps(a5, b7); \
+	t8 = _mm512_mul_ps(a5, b8); \
+	t9 = _mm512_mul_ps(a5, b9); \
+	ta = _mm512_mul_ps(a5, ba); \
+	tb = _mm512_mul_ps(a5, bb); \
+	tc = _mm512_mul_ps(a5, bc); \
+	td = _mm512_mul_ps(a5, bd); \
+	te = _mm512_mul_ps(a5, be); \
+	tf = _mm512_mul_ps(a5, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	c5 = _mm512_add_ps(c5, acc); \
+	\
+	t0 = _mm512_mul_ps(a6, b0); \
+	t1 = _mm512_mul_ps(a6, b1); \
+	t2 = _mm512_mul_ps(a6, b2); \
+	t3 = _mm512_mul_ps(a6, b3); \
+	t4 = _mm512_mul_ps(a6, b4); \
+	t5 = _mm512_mul_ps(a6, b5); \
+	t6 = _mm512_mul_ps(a6, b6); \
+	t7 = _mm512_mul_ps(a6, b7); \
+	t8 = _mm512_mul_ps(a6, b8); \
+	t9 = _mm512_mul_ps(a6, b9); \
+	ta = _mm512_mul_ps(a6, ba); \
+	tb = _mm512_mul_ps(a6, bb); \
+	tc = _mm512_mul_ps(a6, bc); \
+	td = _mm512_mul_ps(a6, bd); \
+	te = _mm512_mul_ps(a6, be); \
+	tf = _mm512_mul_ps(a6, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	c6 = _mm512_add_ps(c6, acc); \
+	\
+	t0 = _mm512_mul_ps(a7, b0); \
+	t1 = _mm512_mul_ps(a7, b1); \
+	t2 = _mm512_mul_ps(a7, b2); \
+	t3 = _mm512_mul_ps(a7, b3); \
+	t4 = _mm512_mul_ps(a7, b4); \
+	t5 = _mm512_mul_ps(a7, b5); \
+	t6 = _mm512_mul_ps(a7, b6); \
+	t7 = _mm512_mul_ps(a7, b7); \
+	t8 = _mm512_mul_ps(a7, b8); \
+	t9 = _mm512_mul_ps(a7, b9); \
+	ta = _mm512_mul_ps(a7, ba); \
+	tb = _mm512_mul_ps(a7, bb); \
+	tc = _mm512_mul_ps(a7, bc); \
+	td = _mm512_mul_ps(a7, bd); \
+	te = _mm512_mul_ps(a7, be); \
+	tf = _mm512_mul_ps(a7, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	c7 = _mm512_add_ps(c7, acc); \
+	\
+	t0 = _mm512_mul_ps(a8, b0); \
+	t1 = _mm512_mul_ps(a8, b1); \
+	t2 = _mm512_mul_ps(a8, b2); \
+	t3 = _mm512_mul_ps(a8, b3); \
+	t4 = _mm512_mul_ps(a8, b4); \
+	t5 = _mm512_mul_ps(a8, b5); \
+	t6 = _mm512_mul_ps(a8, b6); \
+	t7 = _mm512_mul_ps(a8, b7); \
+	t8 = _mm512_mul_ps(a8, b8); \
+	t9 = _mm512_mul_ps(a8, b9); \
+	ta = _mm512_mul_ps(a8, ba); \
+	tb = _mm512_mul_ps(a8, bb); \
+	tc = _mm512_mul_ps(a8, bc); \
+	td = _mm512_mul_ps(a8, bd); \
+	te = _mm512_mul_ps(a8, be); \
+	tf = _mm512_mul_ps(a8, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	c8 = _mm512_add_ps(c8, acc); \
+	\
+	t0 = _mm512_mul_ps(a9, b0); \
+	t1 = _mm512_mul_ps(a9, b1); \
+	t2 = _mm512_mul_ps(a9, b2); \
+	t3 = _mm512_mul_ps(a9, b3); \
+	t4 = _mm512_mul_ps(a9, b4); \
+	t5 = _mm512_mul_ps(a9, b5); \
+	t6 = _mm512_mul_ps(a9, b6); \
+	t7 = _mm512_mul_ps(a9, b7); \
+	t8 = _mm512_mul_ps(a9, b8); \
+	t9 = _mm512_mul_ps(a9, b9); \
+	ta = _mm512_mul_ps(a9, ba); \
+	tb = _mm512_mul_ps(a9, bb); \
+	tc = _mm512_mul_ps(a9, bc); \
+	td = _mm512_mul_ps(a9, bd); \
+	te = _mm512_mul_ps(a9, be); \
+	tf = _mm512_mul_ps(a9, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	c9 = _mm512_add_ps(c9, acc); \
+	\
+	t0 = _mm512_mul_ps(aa, b0); \
+	t1 = _mm512_mul_ps(aa, b1); \
+	t2 = _mm512_mul_ps(aa, b2); \
+	t3 = _mm512_mul_ps(aa, b3); \
+	t4 = _mm512_mul_ps(aa, b4); \
+	t5 = _mm512_mul_ps(aa, b5); \
+	t6 = _mm512_mul_ps(aa, b6); \
+	t7 = _mm512_mul_ps(aa, b7); \
+	t8 = _mm512_mul_ps(aa, b8); \
+	t9 = _mm512_mul_ps(aa, b9); \
+	ta = _mm512_mul_ps(aa, ba); \
+	tb = _mm512_mul_ps(aa, bb); \
+	tc = _mm512_mul_ps(aa, bc); \
+	td = _mm512_mul_ps(aa, bd); \
+	te = _mm512_mul_ps(aa, be); \
+	tf = _mm512_mul_ps(aa, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	ca = _mm512_add_ps(ca, acc); \
+	\
+	t0 = _mm512_mul_ps(ab, b0); \
+	t1 = _mm512_mul_ps(ab, b1); \
+	t2 = _mm512_mul_ps(ab, b2); \
+	t3 = _mm512_mul_ps(ab, b3); \
+	t4 = _mm512_mul_ps(ab, b4); \
+	t5 = _mm512_mul_ps(ab, b5); \
+	t6 = _mm512_mul_ps(ab, b6); \
+	t7 = _mm512_mul_ps(ab, b7); \
+	t8 = _mm512_mul_ps(ab, b8); \
+	t9 = _mm512_mul_ps(ab, b9); \
+	ta = _mm512_mul_ps(ab, ba); \
+	tb = _mm512_mul_ps(ab, bb); \
+	tc = _mm512_mul_ps(ab, bc); \
+	td = _mm512_mul_ps(ab, bd); \
+	te = _mm512_mul_ps(ab, be); \
+	tf = _mm512_mul_ps(ab, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	cb = _mm512_add_ps(cb, acc); \
+	\
+	t0 = _mm512_mul_ps(ac, b0); \
+	t1 = _mm512_mul_ps(ac, b1); \
+	t2 = _mm512_mul_ps(ac, b2); \
+	t3 = _mm512_mul_ps(ac, b3); \
+	t4 = _mm512_mul_ps(ac, b4); \
+	t5 = _mm512_mul_ps(ac, b5); \
+	t6 = _mm512_mul_ps(ac, b6); \
+	t7 = _mm512_mul_ps(ac, b7); \
+	t8 = _mm512_mul_ps(ac, b8); \
+	t9 = _mm512_mul_ps(ac, b9); \
+	ta = _mm512_mul_ps(ac, ba); \
+	tb = _mm512_mul_ps(ac, bb); \
+	tc = _mm512_mul_ps(ac, bc); \
+	td = _mm512_mul_ps(ac, bd); \
+	te = _mm512_mul_ps(ac, be); \
+	tf = _mm512_mul_ps(ac, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	cc = _mm512_add_ps(cc, acc); \
+	\
+	t0 = _mm512_mul_ps(ad, b0); \
+	t1 = _mm512_mul_ps(ad, b1); \
+	t2 = _mm512_mul_ps(ad, b2); \
+	t3 = _mm512_mul_ps(ad, b3); \
+	t4 = _mm512_mul_ps(ad, b4); \
+	t5 = _mm512_mul_ps(ad, b5); \
+	t6 = _mm512_mul_ps(ad, b6); \
+	t7 = _mm512_mul_ps(ad, b7); \
+	t8 = _mm512_mul_ps(ad, b8); \
+	t9 = _mm512_mul_ps(ad, b9); \
+	ta = _mm512_mul_ps(ad, ba); \
+	tb = _mm512_mul_ps(ad, bb); \
+	tc = _mm512_mul_ps(ad, bc); \
+	td = _mm512_mul_ps(ad, bd); \
+	te = _mm512_mul_ps(ad, be); \
+	tf = _mm512_mul_ps(ad, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	cd = _mm512_add_ps(cd, acc); \
+	\
+	t0 = _mm512_mul_ps(ae, b0); \
+	t1 = _mm512_mul_ps(ae, b1); \
+	t2 = _mm512_mul_ps(ae, b2); \
+	t3 = _mm512_mul_ps(ae, b3); \
+	t4 = _mm512_mul_ps(ae, b4); \
+	t5 = _mm512_mul_ps(ae, b5); \
+	t6 = _mm512_mul_ps(ae, b6); \
+	t7 = _mm512_mul_ps(ae, b7); \
+	t8 = _mm512_mul_ps(ae, b8); \
+	t9 = _mm512_mul_ps(ae, b9); \
+	ta = _mm512_mul_ps(ae, ba); \
+	tb = _mm512_mul_ps(ae, bb); \
+	tc = _mm512_mul_ps(ae, bc); \
+	td = _mm512_mul_ps(ae, bd); \
+	te = _mm512_mul_ps(ae, be); \
+	tf = _mm512_mul_ps(ae, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	ce = _mm512_add_ps(ce, acc); \
+	\
+	t0 = _mm512_mul_ps(af, b0); \
+	t1 = _mm512_mul_ps(af, b1); \
+	t2 = _mm512_mul_ps(af, b2); \
+	t3 = _mm512_mul_ps(af, b3); \
+	t4 = _mm512_mul_ps(af, b4); \
+	t5 = _mm512_mul_ps(af, b5); \
+	t6 = _mm512_mul_ps(af, b6); \
+	t7 = _mm512_mul_ps(af, b7); \
+	t8 = _mm512_mul_ps(af, b8); \
+	t9 = _mm512_mul_ps(af, b9); \
+	ta = _mm512_mul_ps(af, ba); \
+	tb = _mm512_mul_ps(af, bb); \
+	tc = _mm512_mul_ps(af, bc); \
+	td = _mm512_mul_ps(af, bd); \
+	te = _mm512_mul_ps(af, be); \
+	tf = _mm512_mul_ps(af, bf); \
+	\
+	_MM512_MREDUCE_PS(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, acc) \
+	cf = _mm512_add_ps(cf, acc); \
+}
+
+// #define _MM512_MMUL16_PS(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, aa, ab, ac, ad, ae, af, b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, ba, bb, bc, bd, be, bf, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, ca, cb, cc, cd, ce, cf) \
+// {\
+// 	alignas(64) __m512 t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, ta, tb, tc, td, te, tf, c; \
+// 	\
+// 	t0 = _mm512_mul_ps(a0, b0); \
+// 	t1 = _mm512_mul_ps(a0, b1); \
+// 	t2 = _mm512_mul_ps(a0, b2); \
+// 	t3 = _mm512_mul_ps(a0, b3); \
+// 	t4 = _mm512_mul_ps(a0, b4); \
+// 	t5 = _mm512_mul_ps(a0, b5); \
+// 	t6 = _mm512_mul_ps(a0, b6); \
+// 	t7 = _mm512_mul_ps(a0, b7); \
+// 	t8 = _mm512_mul_ps(a0, b8); \
+// 	t9 = _mm512_mul_ps(a0, b9); \
+// 	ta = _mm512_mul_ps(a0, ba); \
+// 	tb = _mm512_mul_ps(a0, bb); \
+// 	tc = _mm512_mul_ps(a0, bc); \
+// 	td = _mm512_mul_ps(a0, bd); \
+// 	te = _mm512_mul_ps(a0, be); \
+// 	tf = _mm512_mul_ps(a0, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	c0 = _mm512_add_ps(c0, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(a1, b0); \
+// 	t1 = _mm512_mul_ps(a1, b1); \
+// 	t2 = _mm512_mul_ps(a1, b2); \
+// 	t3 = _mm512_mul_ps(a1, b3); \
+// 	t4 = _mm512_mul_ps(a1, b4); \
+// 	t5 = _mm512_mul_ps(a1, b5); \
+// 	t6 = _mm512_mul_ps(a1, b6); \
+// 	t7 = _mm512_mul_ps(a1, b7); \
+// 	t8 = _mm512_mul_ps(a1, b8); \
+// 	t9 = _mm512_mul_ps(a1, b9); \
+// 	ta = _mm512_mul_ps(a1, ba); \
+// 	tb = _mm512_mul_ps(a1, bb); \
+// 	tc = _mm512_mul_ps(a1, bc); \
+// 	td = _mm512_mul_ps(a1, bd); \
+// 	te = _mm512_mul_ps(a1, be); \
+// 	tf = _mm512_mul_ps(a1, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	c1 = _mm512_add_ps(c1, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(a2, b0); \
+// 	t1 = _mm512_mul_ps(a2, b1); \
+// 	t2 = _mm512_mul_ps(a2, b2); \
+// 	t3 = _mm512_mul_ps(a2, b3); \
+// 	t4 = _mm512_mul_ps(a2, b4); \
+// 	t5 = _mm512_mul_ps(a2, b5); \
+// 	t6 = _mm512_mul_ps(a2, b6); \
+// 	t7 = _mm512_mul_ps(a2, b7); \
+// 	t8 = _mm512_mul_ps(a2, b8); \
+// 	t9 = _mm512_mul_ps(a2, b9); \
+// 	ta = _mm512_mul_ps(a2, ba); \
+// 	tb = _mm512_mul_ps(a2, bb); \
+// 	tc = _mm512_mul_ps(a2, bc); \
+// 	td = _mm512_mul_ps(a2, bd); \
+// 	te = _mm512_mul_ps(a2, be); \
+// 	tf = _mm512_mul_ps(a2, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	c2 = _mm512_add_ps(c2, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(a3, b0); \
+// 	t1 = _mm512_mul_ps(a3, b1); \
+// 	t2 = _mm512_mul_ps(a3, b2); \
+// 	t3 = _mm512_mul_ps(a3, b3); \
+// 	t4 = _mm512_mul_ps(a3, b4); \
+// 	t5 = _mm512_mul_ps(a3, b5); \
+// 	t6 = _mm512_mul_ps(a3, b6); \
+// 	t7 = _mm512_mul_ps(a3, b7); \
+// 	t8 = _mm512_mul_ps(a3, b8); \
+// 	t9 = _mm512_mul_ps(a3, b9); \
+// 	ta = _mm512_mul_ps(a3, ba); \
+// 	tb = _mm512_mul_ps(a3, bb); \
+// 	tc = _mm512_mul_ps(a3, bc); \
+// 	td = _mm512_mul_ps(a3, bd); \
+// 	te = _mm512_mul_ps(a3, be); \
+// 	tf = _mm512_mul_ps(a3, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	c3 = _mm512_add_ps(c3, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(a4, b0); \
+// 	t1 = _mm512_mul_ps(a4, b1); \
+// 	t2 = _mm512_mul_ps(a4, b2); \
+// 	t3 = _mm512_mul_ps(a4, b3); \
+// 	t4 = _mm512_mul_ps(a4, b4); \
+// 	t5 = _mm512_mul_ps(a4, b5); \
+// 	t6 = _mm512_mul_ps(a4, b6); \
+// 	t7 = _mm512_mul_ps(a4, b7); \
+// 	t8 = _mm512_mul_ps(a4, b8); \
+// 	t9 = _mm512_mul_ps(a4, b9); \
+// 	ta = _mm512_mul_ps(a4, ba); \
+// 	tb = _mm512_mul_ps(a4, bb); \
+// 	tc = _mm512_mul_ps(a4, bc); \
+// 	td = _mm512_mul_ps(a4, bd); \
+// 	te = _mm512_mul_ps(a4, be); \
+// 	tf = _mm512_mul_ps(a4, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	c4 = _mm512_add_ps(c4, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(a5, b0); \
+// 	t1 = _mm512_mul_ps(a5, b1); \
+// 	t2 = _mm512_mul_ps(a5, b2); \
+// 	t3 = _mm512_mul_ps(a5, b3); \
+// 	t4 = _mm512_mul_ps(a5, b4); \
+// 	t5 = _mm512_mul_ps(a5, b5); \
+// 	t6 = _mm512_mul_ps(a5, b6); \
+// 	t7 = _mm512_mul_ps(a5, b7); \
+// 	t8 = _mm512_mul_ps(a5, b8); \
+// 	t9 = _mm512_mul_ps(a5, b9); \
+// 	ta = _mm512_mul_ps(a5, ba); \
+// 	tb = _mm512_mul_ps(a5, bb); \
+// 	tc = _mm512_mul_ps(a5, bc); \
+// 	td = _mm512_mul_ps(a5, bd); \
+// 	te = _mm512_mul_ps(a5, be); \
+// 	tf = _mm512_mul_ps(a5, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	c5 = _mm512_add_ps(c5, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(a6, b0); \
+// 	t1 = _mm512_mul_ps(a6, b1); \
+// 	t2 = _mm512_mul_ps(a6, b2); \
+// 	t3 = _mm512_mul_ps(a6, b3); \
+// 	t4 = _mm512_mul_ps(a6, b4); \
+// 	t5 = _mm512_mul_ps(a6, b5); \
+// 	t6 = _mm512_mul_ps(a6, b6); \
+// 	t7 = _mm512_mul_ps(a6, b7); \
+// 	t8 = _mm512_mul_ps(a6, b8); \
+// 	t9 = _mm512_mul_ps(a6, b9); \
+// 	ta = _mm512_mul_ps(a6, ba); \
+// 	tb = _mm512_mul_ps(a6, bb); \
+// 	tc = _mm512_mul_ps(a6, bc); \
+// 	td = _mm512_mul_ps(a6, bd); \
+// 	te = _mm512_mul_ps(a6, be); \
+// 	tf = _mm512_mul_ps(a6, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	c6 = _mm512_add_ps(c6, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(a7, b0); \
+// 	t1 = _mm512_mul_ps(a7, b1); \
+// 	t2 = _mm512_mul_ps(a7, b2); \
+// 	t3 = _mm512_mul_ps(a7, b3); \
+// 	t4 = _mm512_mul_ps(a7, b4); \
+// 	t5 = _mm512_mul_ps(a7, b5); \
+// 	t6 = _mm512_mul_ps(a7, b6); \
+// 	t7 = _mm512_mul_ps(a7, b7); \
+// 	t8 = _mm512_mul_ps(a7, b8); \
+// 	t9 = _mm512_mul_ps(a7, b9); \
+// 	ta = _mm512_mul_ps(a7, ba); \
+// 	tb = _mm512_mul_ps(a7, bb); \
+// 	tc = _mm512_mul_ps(a7, bc); \
+// 	td = _mm512_mul_ps(a7, bd); \
+// 	te = _mm512_mul_ps(a7, be); \
+// 	tf = _mm512_mul_ps(a7, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	c7 = _mm512_add_ps(c7, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(a8, b0); \
+// 	t1 = _mm512_mul_ps(a8, b1); \
+// 	t2 = _mm512_mul_ps(a8, b2); \
+// 	t3 = _mm512_mul_ps(a8, b3); \
+// 	t4 = _mm512_mul_ps(a8, b4); \
+// 	t5 = _mm512_mul_ps(a8, b5); \
+// 	t6 = _mm512_mul_ps(a8, b6); \
+// 	t7 = _mm512_mul_ps(a8, b7); \
+// 	t8 = _mm512_mul_ps(a8, b8); \
+// 	t9 = _mm512_mul_ps(a8, b9); \
+// 	ta = _mm512_mul_ps(a8, ba); \
+// 	tb = _mm512_mul_ps(a8, bb); \
+// 	tc = _mm512_mul_ps(a8, bc); \
+// 	td = _mm512_mul_ps(a8, bd); \
+// 	te = _mm512_mul_ps(a8, be); \
+// 	tf = _mm512_mul_ps(a8, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	c8 = _mm512_add_ps(c8, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(a9, b0); \
+// 	t1 = _mm512_mul_ps(a9, b1); \
+// 	t2 = _mm512_mul_ps(a9, b2); \
+// 	t3 = _mm512_mul_ps(a9, b3); \
+// 	t4 = _mm512_mul_ps(a9, b4); \
+// 	t5 = _mm512_mul_ps(a9, b5); \
+// 	t6 = _mm512_mul_ps(a9, b6); \
+// 	t7 = _mm512_mul_ps(a9, b7); \
+// 	t8 = _mm512_mul_ps(a9, b8); \
+// 	t9 = _mm512_mul_ps(a9, b9); \
+// 	ta = _mm512_mul_ps(a9, ba); \
+// 	tb = _mm512_mul_ps(a9, bb); \
+// 	tc = _mm512_mul_ps(a9, bc); \
+// 	td = _mm512_mul_ps(a9, bd); \
+// 	te = _mm512_mul_ps(a9, be); \
+// 	tf = _mm512_mul_ps(a9, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	c9 = _mm512_add_ps(c9, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(aa, b0); \
+// 	t1 = _mm512_mul_ps(aa, b1); \
+// 	t2 = _mm512_mul_ps(aa, b2); \
+// 	t3 = _mm512_mul_ps(aa, b3); \
+// 	t4 = _mm512_mul_ps(aa, b4); \
+// 	t5 = _mm512_mul_ps(aa, b5); \
+// 	t6 = _mm512_mul_ps(aa, b6); \
+// 	t7 = _mm512_mul_ps(aa, b7); \
+// 	t8 = _mm512_mul_ps(aa, b8); \
+// 	t9 = _mm512_mul_ps(aa, b9); \
+// 	ta = _mm512_mul_ps(aa, ba); \
+// 	tb = _mm512_mul_ps(aa, bb); \
+// 	tc = _mm512_mul_ps(aa, bc); \
+// 	td = _mm512_mul_ps(aa, bd); \
+// 	te = _mm512_mul_ps(aa, be); \
+// 	tf = _mm512_mul_ps(aa, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	ca = _mm512_add_ps(ca, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(ab, b0); \
+// 	t1 = _mm512_mul_ps(ab, b1); \
+// 	t2 = _mm512_mul_ps(ab, b2); \
+// 	t3 = _mm512_mul_ps(ab, b3); \
+// 	t4 = _mm512_mul_ps(ab, b4); \
+// 	t5 = _mm512_mul_ps(ab, b5); \
+// 	t6 = _mm512_mul_ps(ab, b6); \
+// 	t7 = _mm512_mul_ps(ab, b7); \
+// 	t8 = _mm512_mul_ps(ab, b8); \
+// 	t9 = _mm512_mul_ps(ab, b9); \
+// 	ta = _mm512_mul_ps(ab, ba); \
+// 	tb = _mm512_mul_ps(ab, bb); \
+// 	tc = _mm512_mul_ps(ab, bc); \
+// 	td = _mm512_mul_ps(ab, bd); \
+// 	te = _mm512_mul_ps(ab, be); \
+// 	tf = _mm512_mul_ps(ab, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	cb = _mm512_add_ps(cb, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(ac, b0); \
+// 	t1 = _mm512_mul_ps(ac, b1); \
+// 	t2 = _mm512_mul_ps(ac, b2); \
+// 	t3 = _mm512_mul_ps(ac, b3); \
+// 	t4 = _mm512_mul_ps(ac, b4); \
+// 	t5 = _mm512_mul_ps(ac, b5); \
+// 	t6 = _mm512_mul_ps(ac, b6); \
+// 	t7 = _mm512_mul_ps(ac, b7); \
+// 	t8 = _mm512_mul_ps(ac, b8); \
+// 	t9 = _mm512_mul_ps(ac, b9); \
+// 	ta = _mm512_mul_ps(ac, ba); \
+// 	tb = _mm512_mul_ps(ac, bb); \
+// 	tc = _mm512_mul_ps(ac, bc); \
+// 	td = _mm512_mul_ps(ac, bd); \
+// 	te = _mm512_mul_ps(ac, be); \
+// 	tf = _mm512_mul_ps(ac, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	cc = _mm512_add_ps(cc, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(ad, b0); \
+// 	t1 = _mm512_mul_ps(ad, b1); \
+// 	t2 = _mm512_mul_ps(ad, b2); \
+// 	t3 = _mm512_mul_ps(ad, b3); \
+// 	t4 = _mm512_mul_ps(ad, b4); \
+// 	t5 = _mm512_mul_ps(ad, b5); \
+// 	t6 = _mm512_mul_ps(ad, b6); \
+// 	t7 = _mm512_mul_ps(ad, b7); \
+// 	t8 = _mm512_mul_ps(ad, b8); \
+// 	t9 = _mm512_mul_ps(ad, b9); \
+// 	ta = _mm512_mul_ps(ad, ba); \
+// 	tb = _mm512_mul_ps(ad, bb); \
+// 	tc = _mm512_mul_ps(ad, bc); \
+// 	td = _mm512_mul_ps(ad, bd); \
+// 	te = _mm512_mul_ps(ad, be); \
+// 	tf = _mm512_mul_ps(ad, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	cd = _mm512_add_ps(cd, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(ae, b0); \
+// 	t1 = _mm512_mul_ps(ae, b1); \
+// 	t2 = _mm512_mul_ps(ae, b2); \
+// 	t3 = _mm512_mul_ps(ae, b3); \
+// 	t4 = _mm512_mul_ps(ae, b4); \
+// 	t5 = _mm512_mul_ps(ae, b5); \
+// 	t6 = _mm512_mul_ps(ae, b6); \
+// 	t7 = _mm512_mul_ps(ae, b7); \
+// 	t8 = _mm512_mul_ps(ae, b8); \
+// 	t9 = _mm512_mul_ps(ae, b9); \
+// 	ta = _mm512_mul_ps(ae, ba); \
+// 	tb = _mm512_mul_ps(ae, bb); \
+// 	tc = _mm512_mul_ps(ae, bc); \
+// 	td = _mm512_mul_ps(ae, bd); \
+// 	te = _mm512_mul_ps(ae, be); \
+// 	tf = _mm512_mul_ps(ae, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	ce = _mm512_add_ps(ce, c); \
+// 	\
+// 	t0 = _mm512_mul_ps(af, b0); \
+// 	t1 = _mm512_mul_ps(af, b1); \
+// 	t2 = _mm512_mul_ps(af, b2); \
+// 	t3 = _mm512_mul_ps(af, b3); \
+// 	t4 = _mm512_mul_ps(af, b4); \
+// 	t5 = _mm512_mul_ps(af, b5); \
+// 	t6 = _mm512_mul_ps(af, b6); \
+// 	t7 = _mm512_mul_ps(af, b7); \
+// 	t8 = _mm512_mul_ps(af, b8); \
+// 	t9 = _mm512_mul_ps(af, b9); \
+// 	ta = _mm512_mul_ps(af, ba); \
+// 	tb = _mm512_mul_ps(af, bb); \
+// 	tc = _mm512_mul_ps(af, bc); \
+// 	td = _mm512_mul_ps(af, bd); \
+// 	te = _mm512_mul_ps(af, be); \
+// 	tf = _mm512_mul_ps(af, bf); \
+// 	\
+// 	c = _mm512_set_ps( \
+// 		_mm512_reduce_add_ps(tf), \
+// 		_mm512_reduce_add_ps(te), \
+// 		_mm512_reduce_add_ps(td), \
+// 		_mm512_reduce_add_ps(tc), \
+// 		_mm512_reduce_add_ps(tb), \
+// 		_mm512_reduce_add_ps(ta), \
+// 		_mm512_reduce_add_ps(t9), \
+// 		_mm512_reduce_add_ps(t8), \
+// 		_mm512_reduce_add_ps(t7), \
+// 		_mm512_reduce_add_ps(t6), \
+// 		_mm512_reduce_add_ps(t5), \
+// 		_mm512_reduce_add_ps(t4), \
+// 		_mm512_reduce_add_ps(t3), \
+// 		_mm512_reduce_add_ps(t2), \
+// 		_mm512_reduce_add_ps(t1), \
+// 		_mm512_reduce_add_ps(t0)); \
+// 	cf = _mm512_add_ps(cf, c); \
 
 /* COMPLEX MATRIX-MATRIX MULTIPLY OPS*/
 
@@ -1426,14 +2901,9 @@
 
 #define _MM512_MREDUCE_C_PS(c0, c1, c2, c3, c4, c5, c6, c7, acc) \
 { \
-	/* Horizontal reduction - sum within each vector */ \
-	/* Each c vector has 8 complex numbers (16 floats) */ \
-	/* We need to sum them to get 1 complex number per vector */ \
-	\
-	/* Step 1: Split each vector and add halves */ \
 	__m256 c0_lo = _mm512_castps512_ps256(c0); \
 	__m256 c0_hi = _mm512_extractf32x8_ps(c0, 1); \
-	__m256 sum0 = _mm256_add_ps(c0_lo, c0_hi); /* 4 complex */ \
+	__m256 sum0 = _mm256_add_ps(c0_lo, c0_hi); \
 	\
 	__m256 c1_lo = _mm512_castps512_ps256(c1); \
 	__m256 c1_hi = _mm512_extractf32x8_ps(c1, 1); \
@@ -1463,10 +2933,9 @@
 	__m256 c7_hi = _mm512_extractf32x8_ps(c7, 1); \
 	__m256 sum7 = _mm256_add_ps(c7_lo, c7_hi); \
 	\
-	/* Step 2: Further reduce each to 2 complex numbers */ \
 	__m128 s0_lo = _mm256_castps256_ps128(sum0); \
 	__m128 s0_hi = _mm256_extractf128_ps(sum0, 1); \
-	__m128 red0 = _mm_add_ps(s0_lo, s0_hi); /* 2 complex */ \
+	__m128 red0 = _mm_add_ps(s0_lo, s0_hi); \
 	\
 	__m128 s1_lo = _mm256_castps256_ps128(sum1); \
 	__m128 s1_hi = _mm256_extractf128_ps(sum1, 1); \
@@ -1496,7 +2965,6 @@
 	__m128 s7_hi = _mm256_extractf128_ps(sum7, 1); \
 	__m128 red7 = _mm_add_ps(s7_lo, s7_hi); \
 	\
-	/* Step 3: Final reduction to 1 complex per vector */ \
 	__m128 final0 = _mm_add_ps(red0, _mm_movehl_ps(red0, red0)); \
 	__m128 final1 = _mm_add_ps(red1, _mm_movehl_ps(red1, red1)); \
 	__m128 final2 = _mm_add_ps(red2, _mm_movehl_ps(red2, red2)); \
@@ -1506,7 +2974,6 @@
 	__m128 final6 = _mm_add_ps(red6, _mm_movehl_ps(red6, red6)); \
 	__m128 final7 = _mm_add_ps(red7, _mm_movehl_ps(red7, red7)); \
 	\
-	/* Step 4: Pack results into output vector */ \
 	__m128 res01 = _mm_movelh_ps(final0, final1); \
 	__m128 res23 = _mm_movelh_ps(final2, final3); \
 	__m128 res45 = _mm_movelh_ps(final4, final5); \

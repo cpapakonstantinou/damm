@@ -205,7 +205,7 @@ namespace damm
 		 * \note Uses broadcast semantics: scalar B is combined with each element of A.
 		 * \note More efficient than matrix-matrix operations when one operand is scalar.
 		 */
-		template<typename T, typename O, SIMD S, const size_t threads = _threads>
+		template<typename T, typename O, SIMD S, const size_t block_size = _block_size, const size_t threads = _threads>
 		requires 
 		(
 			std::same_as<O, std::plus<>> ||

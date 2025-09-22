@@ -28,6 +28,7 @@
 #include "multiply.h"
 #include <complex>
 #include <format>
+#include <cstring>
 
 using namespace damm;
 
@@ -43,10 +44,12 @@ multiply_naive(T** A, T** B, T**C, const size_t M, const size_t N, const size_t 
 
 
 template<typename T>
-void
+bool
 test_all_ops(const size_t M, const size_t N, const size_t P)
 {
 	static constexpr size_t ALIGN = 64;
+	bool ret = true;
+
 	carray<T, 2, ALIGN> A(M, N);
 	carray<T, 2, ALIGN> B(N, P);
 	carray<T, 2, ALIGN> C_ref(M, P);
@@ -57,44 +60,58 @@ test_all_ops(const size_t M, const size_t N, const size_t P)
 
 	fill_rand<T>(A.get(), M, N);
 
-	fill_rand<T>(B.get(), M, N);
+	fill_rand<T>(B.get(), N, P);
+
+	std::memset(C_ref.get()[0], 0, M * P * sizeof(T));
+	std::memset(C_none.get()[0], 0, M * P * sizeof(T));
+	std::memset(C_sse.get()[0], 0, M * P * sizeof(T));
+	std::memset(C_avx.get()[0], 0, M * P * sizeof(T));
+	std::memset(C_avx512.get()[0], 0, M * P * sizeof(T));
 
 	multiply_naive<T>(A.get(), B.get(), C_ref.get(), M, N, P);
 
 	multiply<T, NONE>(A.get(), B.get(), C_none.get(), M, N, P);
-	
+		
 	multiply<T, SSE>(A.get(), B.get(), C_sse.get(), M, N, P);
 
 	multiply<T, AVX>(A.get(), B.get(), C_avx.get(), M, N, P);
 
 	multiply<T, AVX512>(A.get(), B.get(), C_avx512.get(), M, N, P);
 
-	is_same<T>(std::format("multiply<{},{}>:", typeid(T).name(), "NONE").c_str(), C_ref.get(), C_none.get(), M, P);
+	ret &= is_same<T>(std::format("multiply<{},{}>:", typeid(T).name(), "NONE").c_str(), C_ref.get(), C_none.get(), M, P);
 	
-	is_same<T>(std::format("multiply<{},{}>:", typeid(T).name(), "SSE").c_str(), C_ref.get(), C_sse.get(), M, P);
+	ret &= is_same<T>(std::format("multiply<{},{}>:", typeid(T).name(), "SSE").c_str(), C_ref.get(), C_sse.get(), M, P);
 
-	is_same<T>(std::format("multiply<{},{}>:", typeid(T).name(), "AVX").c_str(), C_ref.get(), C_avx.get(), M, P);
+	ret &= is_same<T>(std::format("multiply<{},{}>:", typeid(T).name(), "AVX").c_str(), C_ref.get(), C_avx.get(), M, P);
 
-	is_same<T>(std::format("multiply<{},{}>:", typeid(T).name(), "AVX512").c_str(), C_ref.get(), C_avx512.get(), M, P);
+	ret &= is_same<T>(std::format("multiply<{},{}>:", typeid(T).name(), "AVX512").c_str(), C_ref.get(), C_avx512.get(), M, P);
 
-
-	// print_matrix<T>(C_ref.get(), M, P, "ref");
-	// print_matrix<T>(C_sse.get(), M, P, "sse");
-	// print_matrix<T>(C_avx.get(), M, P, "avx");
-	// print_matrix<T>(C_avx512.get(), M, P, "avx512");
+	return ret;
 }
 
 int main(int argc, char* argv[])
 {
-	static constexpr size_t M = 8;
-	static constexpr size_t N = 8;
-	static constexpr size_t P = 8;
+	static constexpr size_t M[] = {8, 16, 50};
+	static constexpr size_t N[] = {8, 16};
+	static constexpr size_t P[] = {8, 16};
 	try
 	{
-		test_all_ops<float>(M, N, P);
-		test_all_ops<double>(M, N, P);
-		test_all_ops<std::complex<float>>(M, N, P);
-		test_all_ops<std::complex<double>>(M, N, P);
+		for(size_t m = 0; m < sizeof(M)/sizeof(size_t); ++m)
+		{
+			for(size_t n = 0; n < sizeof(N)/sizeof(size_t); ++n)
+			{
+				for(size_t p = 0; p < sizeof(P)/sizeof(size_t); ++p)
+				{
+					bool all_ops = true;
+					all_ops &= test_all_ops<float>(M[m], N[n], P[p]);
+					all_ops &= test_all_ops<double>(M[m], N[n], P[p]);
+					all_ops &= test_all_ops<std::complex<float>>(M[m], N[n], P[p]);
+					all_ops &= test_all_ops<std::complex<double>>(M[m], N[n], P[p]);
+					std::string report = std::format("[{}] multiply: M={}, N={}, P={}", ((all_ops) ? "OK" : "FAIL"), M[m], N[n], P[p]);
+					std::cout << report << std::endl;
+				}
+			}
+		}
 	}
 	catch(const std::exception& e)
 	{

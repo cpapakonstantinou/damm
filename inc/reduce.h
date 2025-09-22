@@ -317,27 +317,28 @@ namespace damm
 		constexpr size_t cache_line_bytes = 64;
 		constexpr size_t cache_line_elems = cache_line_bytes / sizeof(T);
 
-		const size_t total_elements = M * N;
-		const size_t full_blocks = total_elements / cache_line_elems;
-		const size_t remainder = total_elements % cache_line_elems;
-
 		alignas(S) std::array<T, threads> partials;
+		
 		partials.fill(seed_left_fold<T, O>());
 
-		parallel_for( 0, full_blocks, 1,
-			[&](size_t block, size_t index, size_t thread_id)
+		parallel_for( 0, M, block_size,
+			[&](size_t i, size_t index, size_t thread_id)
 			{
-				const size_t offset = block * cache_line_elems;
-				T partial = seed_left_fold<T, O>();
+				for (size_t j = 0; j + block_size <= N; j += block_size) 
+				{				
+					const size_t offset = j + N*i;
+					
+					T partial = seed_left_fold<T, O>();
 
-				if constexpr (S == SSE)
-					_reduce_block_sse<T, O>(A + offset, partial);
-				if constexpr (S == AVX)
-					_reduce_block_avx<T, O>(A + offset, partial);
-				if constexpr (S == AVX512)
-					_reduce_block_avx512<T, O>(A + offset, partial);
+					if constexpr (S == SSE)
+						_reduce_block_sse<T, O>(A + offset, partial);
+					if constexpr (S == AVX)
+						_reduce_block_avx<T, O>(A + offset, partial);
+					if constexpr (S == AVX512)
+						_reduce_block_avx512<T, O>(A + offset, partial);
 
-				partials[thread_id] = O{}(partials[thread_id], partial);
+					partials[thread_id] = O{}(partials[thread_id], partial);
+				}
 			}, threads);
 
 		T result = seed;

@@ -81,43 +81,56 @@ is_transposed(const char* name, T** A, T** B, const size_t N, const size_t M, bo
 	return true;
 }
 template<typename T>
-void
+bool
 test_all_ops(const size_t M, const size_t N)
 {
 	static constexpr size_t ALIGN = 64;
+	bool ret = true;
 
 	carray<T, 2, ALIGN> A(M, N);
-	carray<T, 2, ALIGN> B(N, M);
-	carray<T, 2, ALIGN> C(N, M);
-	carray<T, 2, ALIGN> D(N, M);
-	carray<T, 2, ALIGN> E(N, M);
-	carray<T, 2, ALIGN> F(N, M);
+	carray<T, 2, ALIGN> B_ref(N, M);
+	carray<T, 2, ALIGN> B_none(N, M);
+	carray<T, 2, ALIGN> B_sse(N, M);
+	carray<T, 2, ALIGN> B_avx(N, M);
+	carray<T, 2, ALIGN> B_avx512(N, M);
 
 	fill_rand<T>(A.get(), M , N);
 
-	transpose_naive<T>(A.get(), B.get(), M, N);
-	transpose<T, NONE>(A.get(), C.get(), M, N);
-	transpose<T, SSE>(A.get(), D.get(), M, N);
-	transpose<T, AVX>(A.get(), E.get(), M, N);
-	transpose<T, AVX512>(A.get(), F.get(), M, N);
+	transpose_naive<T>(A.get(), B_ref.get(), M, N);
+	transpose<T, NONE>(A.get(), B_none.get(), M, N);
+	transpose<T, SSE>(A.get(), B_sse.get(), M, N);
+	transpose<T, AVX>(A.get(), B_avx.get(), M, N);
+	transpose<T, AVX512>(A.get(), B_avx512.get(), M, N);
 
-	is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "REF").c_str(), A.get(), B.get(), M, N);
-	is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "NONE").c_str(), A.get(), C.get(), M, N);
-	is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "SSE").c_str(), A.get(), D.get(), M, N);
-	is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "AVX").c_str(), A.get(), E.get(), M, N);
-	is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "AVX512").c_str(), A.get(), F.get(), M, N);
+	ret &= is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "REF").c_str(), A.get(), B_ref.get(), M, N);
+	ret &= is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "NONE").c_str(), A.get(), B_none.get(), M, N);
+	ret &= is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "SSE").c_str(), A.get(), B_sse.get(), M, N);
+	ret &= is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "AVX").c_str(), A.get(), B_avx.get(), M, N);
+	ret &= is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "AVX512").c_str(), A.get(), B_avx512.get(), M, N);
+	return ret;
 }
+
 int main() 
 {
-	static constexpr size_t M = 2;
-	static constexpr size_t N = 2;
 
+	static constexpr size_t M[] = {8, 32, 64, 128};
+	static constexpr size_t N[] = {8, 32, 64, 128};
 	try
 	{
-		test_all_ops<float>(M, N);
-		test_all_ops<double>(M, N);
-		test_all_ops<std::complex<float>>(M, N);
-		test_all_ops<std::complex<double>>(M, N);
+
+		for(size_t m = 0; m < sizeof(M)/sizeof(size_t); ++m)
+		{
+			for(size_t n = 0; n < sizeof(N)/sizeof(size_t); ++n)
+			{
+				bool all_ops = true;
+				all_ops &= test_all_ops<float>(M[m], N[n]);
+				all_ops &= test_all_ops<double>(M[m], N[n]);
+				all_ops &= test_all_ops<std::complex<float>>(M[m], N[n]);
+				all_ops &= test_all_ops<std::complex<double>>(M[m], N[n]);
+				std::string report = std::format("[{}] transpose: M={}, N={}", ((all_ops) ? "OK" : "FAIL"), M[m], N[n]);
+				std::cout << report << std::endl;
+			}
+		}
 	}
 	catch(const std::exception& e)
 	{
