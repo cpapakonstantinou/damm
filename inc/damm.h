@@ -26,15 +26,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include <common.h>
 #include <broadcast.h>
-#include <transpose.h>
-#include <multiply.h>
 #include <union.h>
 #include <reduce.h>
 #include <fused_union.h>
 #include <fused_reduce.h>
+#include <transpose.h>
+#include <multiply.h>
 #include <householder.h>
+#include <decompose.h>
 #include <solve.h>
 #include <inverse.h>
 

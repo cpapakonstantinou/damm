@@ -31,61 +31,30 @@
 #include <ranges>
 #include <cmath>
 #include <common.h>
+#include <damm_memory.h>
 #include <fused_union.h>
 #include <union.h>
 #include <reduce.h>
 #include <multiply.h>
 #include <transpose.h>
 #include <householder.h>
+#include <broadcast.h>
 
 namespace damm
 {
 
 /**
- * \brief Decomposition Policy for selecting matrix decomposition method.
- */
-enum class DecomposePolicy 
-{
-	LU,    ///< LU decomposition with partial pivoting
-	QR     ///< QR decomposition using Householder reflections
-};
-
-/**
- * \brief Matrix Decomposition Operations - Policy-driven SIMD-optimized decompositions
+ * \brief Matrix Decomposition - SIMD aware decomposition algorithms.
  *
- * Provides efficient matrix decomposition routines using SIMD-optimized operations
- * with configurable decomposition method via DecomposePolicy.
+ * Provides efficient matrix decomposition routines using SIMD-optimized operations.
  *
- * \section decompose_policies Decomposition Policies
- *
- * \subsection lu_policy LU Policy
- * **LU Decomposition with Partial Pivoting** - Decomposes A into P*A = L*U
- *
- * **Usage Pattern:**
- * \code{.cpp}
- * std::vector<size_t> P;
- * bool success = decompose_block_simd<DecomposePolicy::LU, double, AVX>(A, P, N);
- * \endcode
- *
- * \subsection qr_policy QR Policy  
- * **QR Decomposition using Householder Reflections** - Decomposes A into A = Q*R
- *
- * **Usage Pattern:**
- * \code{.cpp}
- * auto Q = aligned_alloc_2D<float, AVX>(M, M);
- * auto R = aligned_alloc_2D<float, AVX>(M, N);
- * bool success = decompose_block_simd<DecomposePolicy::QR, float, AVX512>(A, Q.get(), R.get(), M, N);
- * \endcode
- *
- * \note All operations support float/double types and asymmetric matrices (M ≠ N).
- * \note Choose SIMD level (SSE/AVX/AVX512) based on target hardware for optimal performance.
  * \note Uses fused_union operations for optimal SIMD elimination patterns.
  */
 
 namespace lu
 {
 	/** 
-	 * \brief kernal for LU pivot search. 
+	 * \brief kernel for LU pivot search. 
 	 * Low level function not intended for the public API.
 	 */
 	template <typename T>
@@ -109,23 +78,25 @@ namespace lu
 	}
 
 	/** 
-	 * \brief kernal for LU elimination step using fused_union. 
+	 * \brief kernel for LU elimination step using fused_union. 
 	 * Low level function not intended for the public API.
 	 */
-	template <typename T, SIMD S>
+	template <typename T, typename S>
 	inline __attribute__((always_inline))
 	void
-	_eliminate_row(T* current_row, T* pivot_row, const T multiplier, const size_t remaining_cols)
+	_eliminate_row(T** current_row, T** pivot_row, const T multiplier, const size_t remaining_cols)
 	{
 		if (remaining_cols == 0) return;
 		
-		auto temp_row = aligned_alloc_1D<T, static_cast<size_t>(S)>(1, remaining_cols);
+		auto temp_row = aligned_alloc_2D<T, S::bytes>(1, remaining_cols);
 		
+		// Compute: temp_row = current_row + (-multiplier) * pivot_row
+		// Using FUSION_FIRST: temp_row = current_row + (pivot_row * (-multiplier))
 		scalar::fused_union<FusionPolicy::FUSION_FIRST, T, 
-			std::plus<>, std::multiplies<>, S, _block_size, 1>(
-				current_row, pivot_row, -multiplier, temp_row.get(), 1, remaining_cols);
+			std::plus<>, std::multiplies<>, S>(
+				current_row, -multiplier, pivot_row, temp_row.get(), 1, remaining_cols);
 		
-		std::copy(temp_row.get(), temp_row.get() + remaining_cols, current_row);
+		std::copy(temp_row[0], temp_row[0] + remaining_cols, current_row[0]);
 	}
 
 	/**
@@ -137,7 +108,6 @@ namespace lu
 	 *
 	 * \tparam T        Scalar type (float or double)
 	 * \tparam S        SIMD instruction set (SSE, AVX, AVX512)
-	 * \tparam threads  Number of threads for parallel execution
 	 *
 	 * \param A         Input matrix A (N×N), overwritten with L and U
 	 * \param P         Output permutation vector (size N)
@@ -145,7 +115,7 @@ namespace lu
 	 * 
 	 * \return true if decomposition successful, false if matrix is singular
 	 */
-	template<typename T, SIMD S, const size_t threads = _threads>
+	template<typename T, typename S = decltype(detect_simd())>
 	inline bool
 	decompose(T** A, size_t* P, const size_t N)
 	{		
@@ -175,40 +145,40 @@ namespace lu
 			if (remaining_rows == 0 || remaining_cols == 0) 
 				continue;
 			
-			auto column_k = aligned_alloc_2D<T, static_cast<size_t>(S)>(remaining_rows, 1);
+			// Compute multipliers: A[k+1:N][k] / pivot
+			auto column_k = aligned_alloc_2D<T, S::bytes>(remaining_rows, 1);
 			for (size_t i = 0; i < remaining_rows; ++i)
 				column_k[i][0] = A[k + 1 + i][k];
 			
-			auto pivot_matrix = aligned_alloc_2D<T, static_cast<size_t>(S)>(remaining_rows, 1);
-			for (size_t i = 0; i < remaining_rows; ++i)
-				pivot_matrix[i][0] = pivot;
+			auto multipliers = aligned_alloc_2D<T, S::bytes>(remaining_rows, 1);
+			scalar::unite<T, std::divides<>, S>(column_k.get(), pivot, multipliers.get(), remaining_rows, 1);
 			
-			auto multipliers = aligned_alloc_2D<T, static_cast<size_t>(S)>(remaining_rows, 1);
-			matrix::unite<T, std::divides<>, S>(column_k.get(), pivot_matrix.get(), multipliers.get(), remaining_rows, 1);
-			
+			// Store multipliers back in L part
 			for (size_t i = 0; i < remaining_rows; ++i)
 				A[k + 1 + i][k] = multipliers[i][0];
 			
-			parallel_for(k + 1, N, 1, 
-				[&](size_t i) 
-				{
-					const T multiplier = A[i][k];
-					_eliminate_row<T, S>(&A[i][k + 1], &A[k][k + 1], multiplier, remaining_cols);
-				}, threads);
+			// Eliminate below pivot using fused operations
+			for(size_t i = k + 1; i <  N; ++i)
+			{
+				const T multiplier = A[i][k];
+				
+				// Create views for current row and pivot row (excluding processed columns)
+				auto current_view_data = aligned_alloc_1D<T, S::bytes>(1, remaining_cols);
+				std::copy(&A[i][k + 1], &A[i][N], current_view_data.get());
+				auto current_view = view_as_2D(current_view_data.get(), 1, remaining_cols);
+				
+				auto pivot_view_data = aligned_alloc_1D<T, S::bytes>(1, remaining_cols);
+				std::copy(&A[k][k + 1], &A[k][N], pivot_view_data.get());
+				auto pivot_view = view_as_2D(pivot_view_data.get(), 1, remaining_cols);
+				
+				_eliminate_row<T, S>(current_view.get(), pivot_view.get(), multiplier, remaining_cols);
+				
+				// Copy result back
+				std::copy(current_view[0], current_view[0] + remaining_cols, &A[i][k + 1]);
+			}
 		}
 		
 		return true;
-	}
-
-	/**
-	 * \brief LU Decomposition with flat array interface.
-	 */
-	template<typename T, SIMD S = AVX, const size_t threads = _threads>
-	inline bool
-	decompose(T* A, size_t* P, const size_t N)
-	{
-		auto A_view = view_as_2D(A, N, N);
-		return decompose_simd<T, S, threads>(A_view.get(), P, N);
 	}
 
 } // namespace lu
@@ -224,7 +194,6 @@ namespace qr
 	 *
 	 * \tparam T        Scalar type (float or double)
 	 * \tparam S        SIMD instruction set (SSE, AVX, AVX512)
-	 * \tparam threads  Number of threads for parallel execution
 	 *
 	 * \param A         Input matrix A (M×N), overwritten with R
 	 * \param Q         Output orthogonal matrix Q (M×M)
@@ -234,7 +203,7 @@ namespace qr
 	 * 
 	 * \return true if decomposition successful, false if matrix is rank deficient
 	 */
-	template<typename T, SIMD S, const size_t threads = _threads>
+	template<typename T, typename S = decltype(detect_simd())>
 	inline bool
 	decompose(T** A, T** Q, T** R, const size_t M, const size_t N)
 	{
@@ -243,13 +212,16 @@ namespace qr
 			std::make_tuple(Q, M, M),
 			std::make_tuple(R, M, N));
 		
+		// Initialize Q as identity matrix
+		zeros<T, S>(Q, M, M);
 		set_identity(Q, M, M);
 		
+		// Copy A to R
 		for (size_t i = 0; i < M; ++i)
 			std::copy(A[i], A[i] + N, R[i]);
 		
 		const size_t min_dim = std::min(M, N);
-		auto householder_vector = aligned_alloc_1D<T, static_cast<size_t>(S)>(M, 1);
+		auto householder_vector = aligned_alloc_1D<T, S::bytes>(1, M);
 		
 		for (size_t k = 0; k < min_dim; ++k) 
 		{
@@ -258,23 +230,27 @@ namespace qr
 			if (remaining_rows <= 1)
 				continue;
 			
-			auto column_k = aligned_alloc_1D<T, static_cast<size_t>(S)>(remaining_rows, 1);
+			// Extract column k from row k onward
+			auto column_k = aligned_alloc_1D<T, S::bytes>(1, remaining_rows);
 			for (size_t i = 0; i < remaining_rows; ++i)
 				column_k[i] = R[k + i][k];
 			
+			// Compute Householder vector for this column
 			T tau, beta;
 			make_householder<T, S>(column_k.get(), remaining_rows, householder_vector.get(), tau, beta);
 			
 			if (std::abs(tau) < std::numeric_limits<T>::epsilon())
 				continue; // Skip near-zero reflections
 			
+			// Update R[k][k] with beta, zero out below
 			R[k][k] = beta;
 			for (size_t i = k + 1; i < M; ++i)
 				R[i][k] = T(0);
 			
+			// Apply Householder reflection to remaining columns of R
 			if (k + 1 < N)
 			{
-				auto R_sub = aligned_alloc_2D<T, static_cast<size_t>(S)>(remaining_rows, N - k - 1);
+				auto R_sub = aligned_alloc_2D<T, S::bytes>(remaining_rows, N - k - 1);
 				for (size_t i = 0; i < remaining_rows; ++i)
 					std::copy(&R[k + i][k + 1], &R[k + i][N], R_sub[i]);
 				
@@ -285,7 +261,8 @@ namespace qr
 					std::copy(R_sub[i], R_sub[i] + (N - k - 1), &R[k + i][k + 1]);
 			}
 			
-			auto Q_sub = aligned_alloc_2D<T, static_cast<size_t>(S)>(M, remaining_rows);
+			// Apply Householder reflection to Q from the right
+			auto Q_sub = aligned_alloc_2D<T, S::bytes>(M, remaining_rows);
 			for (size_t i = 0; i < M; ++i)
 				std::copy(&Q[i][k], &Q[i][M], Q_sub[i]);
 			
@@ -297,19 +274,6 @@ namespace qr
 		}
 		
 		return true;
-	}
-
-	/**
-	 * \brief QR Decomposition with flat array interface.
-	 */
-	template<typename T, SIMD S, const size_t threads = _threads>
-	inline bool
-	decompose(T* A, T* Q, T* R, const size_t M, const size_t N)
-	{
-		auto A_view = view_as_2D(A, M, N);
-		auto Q_view = view_as_2D(Q, M, M);
-		auto R_view = view_as_2D(R, M, N);
-		return decompose<T, S, threads>(A_view.get(), Q_view.get(), R_view.get(), M, N);
 	}
 	
 } // namespace qr

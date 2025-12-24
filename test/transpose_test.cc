@@ -4,25 +4,6 @@
  * \author cpapakonstantinou
  * \date 2025
  */
-// Copyright (c) 2025  Constantine Papakonstantinou
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
 #include <numeric>
 #include <complex>
 #include <format>
@@ -31,14 +12,6 @@
 #include "transpose.h"
 using namespace damm; 
 
-template<typename T>
-inline void
-transpose_naive(T** A, T** B, const size_t N, const size_t M)
-{
-	for (size_t i = 0; i < N; ++i )
-		for (size_t j = 0; j < M; ++j )
-			B[j][i] = A[i][j]; 
-}
 
 template<typename T>
 bool 
@@ -102,6 +75,11 @@ test_all_ops(const size_t M, const size_t N)
 	transpose<T, AVX>(A.get(), B_avx.get(), M, N);
 	transpose<T, AVX512>(A.get(), B_avx512.get(), M, N);
 
+	// print_matrix(A.get(), M, N, "Original");
+	// print_matrix(B_sse.get(), M, N, "Transposed (SSE)");
+	// print_matrix(B_avx.get(), M, N, "Transposed (AVX)");
+	// print_matrix(B_avx512.get(), M, N, "Transposed (AVX512)");
+
 	ret &= is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "REF").c_str(), A.get(), B_ref.get(), M, N);
 	ret &= is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "NONE").c_str(), A.get(), B_none.get(), M, N);
 	ret &= is_transposed<T>(std::format("transpose<{},{}>", typeid(T).name(), "SSE").c_str(), A.get(), B_sse.get(), M, N);
@@ -113,8 +91,8 @@ test_all_ops(const size_t M, const size_t N)
 int main() 
 {
 
-	static constexpr size_t M[] = {8, 32, 64, 128};
-	static constexpr size_t N[] = {8, 32, 64, 128};
+	static constexpr size_t M[] = {8, 64, 1024};
+	static constexpr size_t N[] = {8, 64, 1024};
 	try
 	{
 

@@ -4,25 +4,6 @@
  * \author cpapakonstantinou
  * \date 2025
  */
-// Copyright (c) 2025  Constantine Papakonstantinou
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
 #include "test_utils.h"
 #include "carray.h"
 #include "multiply.h"
@@ -31,17 +12,6 @@
 #include <cstring>
 
 using namespace damm;
-
-template<typename T>
-void 
-multiply_naive(T** A, T** B, T**C, const size_t M, const size_t N, const size_t P)
-{
-	for (size_t i = 0; i < M; ++i)
-		for(size_t j = 0; j < P ; ++j )
-			for(size_t k = 0; k < N; ++k)
-				C[i][j] += A[i][k] * B[k][j];
-}
-
 
 template<typename T>
 bool
@@ -59,14 +29,13 @@ test_all_ops(const size_t M, const size_t N, const size_t P)
 	carray<T, 2, ALIGN> C_avx512(M, P);
 
 	fill_rand<T>(A.get(), M, N);
-
 	fill_rand<T>(B.get(), N, P);
 
-	std::memset(C_ref.get()[0], 0, M * P * sizeof(T));
-	std::memset(C_none.get()[0], 0, M * P * sizeof(T));
-	std::memset(C_sse.get()[0], 0, M * P * sizeof(T));
-	std::memset(C_avx.get()[0], 0, M * P * sizeof(T));
-	std::memset(C_avx512.get()[0], 0, M * P * sizeof(T));
+	std::memset(C_ref.begin(), 0, M * P * sizeof(T));
+	std::memset(C_none.begin(), 0, M * P * sizeof(T));
+	std::memset(C_sse.begin(), 0, M * P * sizeof(T));
+	std::memset(C_avx.begin(), 0, M * P * sizeof(T));
+	std::memset(C_avx512.begin(), 0, M * P * sizeof(T));
 
 	multiply_naive<T>(A.get(), B.get(), C_ref.get(), M, N, P);
 
@@ -91,9 +60,9 @@ test_all_ops(const size_t M, const size_t N, const size_t P)
 
 int main(int argc, char* argv[])
 {
-	static constexpr size_t M[] = {8, 16, 50};
-	static constexpr size_t N[] = {8, 16};
-	static constexpr size_t P[] = {8, 16};
+	static constexpr size_t M[] = {1024};
+	static constexpr size_t N[] = {1024};
+	static constexpr size_t P[] = {1024};
 	try
 	{
 		for(size_t m = 0; m < sizeof(M)/sizeof(size_t); ++m)

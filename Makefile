@@ -5,11 +5,11 @@ TARGET:= damm
 TARGET_SYMLINK := lib$(TARGET).so
 TARGET_SONAME := lib$(TARGET).so.$(MAJOR_VER)
 TARGET := lib$(TARGET).so.$(MAJOR_VER).$(MINOR_VER)
-SRC = simd.cc transpose.cc multiply.cc #union.cc reduce.cc fused_union.cc broadcast.cc fused_reduce.cc
+SRC = transpose.cc #multiply.cc #union.cc reduce.cc fused_union.cc broadcast.cc fused_reduce.cc
 
 PREFIX ?= /usr/lib
 INSTALLDIR ?= $(PREFIX)/damm
-HEADERS = inc/common.h inc/damm.h inc/multiply.h inc/transpose.h inc/union.h inc/reduce.h inc/fused_reduce.h inc/fused_union.h inc/broadcast.h inc/decompose.h inc/solve.h inc/inverse.h inc/macros.h inc/householder.h inc/simd.h
+HEADERS = inc/*.h
 
 #Directories
 SRCDIR = src
@@ -24,18 +24,26 @@ LD = $(CXX)
 
 #Compile Options
 OPT = -O3
-DEBUG_SYM = 
+DEBUG_SYM = -g
 CARRAY_DIR = /usr/include/carray
-ASYNC_DIR = /usr/include/async
 ORACLE_DIR = /usr/include/oracle
 LDFLAGS = 
 SIMDFLAGS = -msse4.1 -mavx512f -mavx512cd -mavx512bw -mavx512dq -mfma
-CXXFLAGS = $(CXX_STD) $(DEBUG_SYM) -fPIC $(OPT) -march=native -I$(INCDIR) -I $(CARRAY_DIR) -I $(ASYNC_DIR) -I$(ORACLE_DIR) $(SIMDFLAGS) -funroll-loops
+CXXFLAGS = $(CXX_STD) $(DEBUG_SYM) -fPIC $(OPT) -march=native -I$(INCDIR) -I $(CARRAY_DIR) -I$(ORACLE_DIR) $(SIMDFLAGS) -funroll-loops
 LDLIBS =
-TEST_LDFLAGS = -g -L ./ -Wl,-rpath=.
+TEST_LDFLAGS = -L ./ -Wl,-rpath=.
 TEST_LDLIBS = -ldamm
-TEST_TARGETS = multiply_test transpose_test reduce_test union_test fused_reduce_test fused_union_test householder_test inverse_test decompose_test broadcast_test
-TEST_SOURCES = $(TEST_TARGETS:%=%.cc)
+TEST_TARGETS = simd_test \
+				broadcast_test broadcast_perf \
+				multiply_test multiply_perf \
+				transpose_test transpose_perf \
+				reduce_test reduce_perf \
+				union_test union_perf \
+				fused_reduce_test fused_reduce_perf \
+				fused_union_test fused_union_perf \
+				householder_test inverse_test decompose_test
+				
+TEST_SOURCES = $(TEST_TARGETS:%=%.$(CXX_SUFFIX))
 
 #Shell type
 SHELL := /bin/bash
@@ -56,7 +64,9 @@ $(TEST_TARGETS): %: $(TESTDIR)/%.o $(TARGET)
 
 unit_test:$(TEST_TARGETS)
 	for test in $(TEST_TARGETS); do \
-		./$$test; \
+		if [[ "test" == *"$$test"* ]]; then \
+			./$$test  \
+		fi \
 	done;
 
 clean:
@@ -75,6 +85,6 @@ install: $(TARGET) $(HEADERS)
 uninstall:
 	$(RM) -r $(INSTALLDIR)
 
-.PHONY: all clean help $(TEST_TARGET) $(TARGET) 
+.PHONY: all clean help $(TEST_TARGETS) $(TARGET) 
 
 .DEFAULT_GOAL := $(TARGET)

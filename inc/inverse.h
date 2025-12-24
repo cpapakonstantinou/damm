@@ -30,34 +30,35 @@
 #include <algorithm>
 #include <cmath>
 #include <common.h>
+#include <damm_memory.h>
 #include <decompose.h>
 #include <solve.h>
 #include <broadcast.h>
 #include <multiply.h>
 #include <transpose.h>
 
-
 namespace damm
-{
-
-	/**
-	 * \brief Inversion Policy for selecting matrix inversion method.
-	 */
-	enum class InversePolicy 
-	{
-		LU,    ///< LU-based inversion using forward/backward substitution
-		QR     ///< QR-based inversion/pseudoinverse using orthogonal decomposition
-	};
-	
+{	
 	namespace tri
 	{
-		template <typename T, SIMD S, TRIANGULAR UL>
+		/**
+		 * \brief Triangular matrix inversion.
+		 *
+		 * \param A         Input triangular matrix (N×N)
+		 * \param B         Output inverse matrix (N×N)
+		 * \param N         Matrix dimension
+		 * \param unit_diag If true, assumes unit diagonal
+		 */
+		template <typename T, typename S = decltype(detect_simd()), TRIANGULAR UL = TRIANGULAR::UPPER>
 		void inverse(T** A, T** B, const size_t N, bool unit_diag = false)
 		{
-			auto y = aligned_alloc_1D<T, S>(N, 1);
-			auto x = aligned_alloc_1D<T, S>(N, 1);
+			// Allocate aligned vectors
+			auto y_mat = aligned_alloc_2D<T, S::bytes>(1, N);
+			auto x_mat = aligned_alloc_2D<T, S::bytes>(1, N);
+			T* y = y_mat[0];
+			T* x = x_mat[0];
 
-			zeros<T, NONE>(y.get(), N, 1);
+			std::fill(y, y + N, T(0));
 
 			for (size_t col = 0; col < N; ++col)
 			{
@@ -66,12 +67,12 @@ namespace damm
 				if constexpr(UL == TRIANGULAR::UPPER)
 				{
 					// Solve U x = y by backward substitution
-					backward_substitution<T, S>(A, y.get(), x.get(), N, unit_diag);
+					backward_substitution<T, S>(A, y, x, N, unit_diag);
 				}
-				if constexpr(UL == TRIANGULAR::LOWER)
+				else if constexpr(UL == TRIANGULAR::LOWER)
 				{
 					// Solve L x = y by forward substitution
-					forward_substitution<T, S>(A, y.get(), x.get(), N, unit_diag);
+					forward_substitution<T, S>(A, y, x, N, unit_diag);
 				}
 
 				for (size_t i = 0; i < N; ++i)
@@ -84,37 +85,11 @@ namespace damm
 
 
 	/**
-	 * \brief Matrix Inversion Operations - Policy-driven SIMD-optimized matrix inversion
+	 * \brief Matrix Inversion - SIMD aware inversion algorithms.
 	 *
 	 * Provides efficient matrix inversion routines using SIMD-optimized decomposition
-	 * and solve operations with configurable inversion method via InversePolicy.
+	 * and solve operations. 
 	 *
-	 * \section inverse_policies Inversion Policies
-	 *
-	 * \subsection lu_inverse_policy LU Policy
-	 * **LU-based Matrix Inversion** - Computes A^(-1) using LU decomposition
-	 *
-	 * **Algorithm:**
-	 * 1. Decompose A = P * L * U
-	 * 2. Solve L * Y = P for each column of identity matrix
-	 * 3. Solve U * X = Y for each column to get A^(-1)
-	 *
-	 * **QR-based Matrix Inversion/Pseudoinverse** - Computes A^(-1) or A^+ using QR decomposition
-	 *
-	 * **Algorithm:**
-	 * 1. Decompose A = Q * R  
-	 * 2. For square matrices: A^(-1) = R^(-1) * Q^T
-	 * 3. For overdetermined systems: A^+ = R^(-1) * Q^T (pseudoinverse)
-	 *
-	 * **Usage Pattern:**
-	 * \code{.cpp}
-	 * auto A_inv = aligned_alloc_2D<double, AVX>(N, N);
-	 * bool success = inverse_block_simd<InversePolicy::QR, double, AVX>(A, A_inv.get(), M, N);
-	 * \endcode
-	 *
-	 * \note All operations support float/double types and square matrices only.
-	 * \note Choose SIMD level (SSE/AVX/AVX512) based on target hardware for optimal performance.
-	 * \note Uses decompose.h LU operations and SIMD-optimized solve routines.
 	 */
 	namespace lu
 	{
@@ -127,7 +102,6 @@ namespace damm
 		 *
 		 * \tparam T        Scalar type (float or double)
 		 * \tparam S        SIMD instruction set (SSE, AVX, AVX512)
-		 * \tparam threads  Number of threads for parallel execution
 		 *
 		 * \param A         Input matrix A (N×N), will be overwritten with LU factors
 		 * \param A_inv     Output inverse matrix A^(-1) (N×N)
@@ -135,104 +109,94 @@ namespace damm
 		 * 
 		 * \return true if inversion successful, false if matrix is singular
 		 *
-		 * \note Matrix ,SA is modified during computation (contains LU factors on exit)
-		 * \note Uses parallel computation for multiple right-hand sides
+		 * \note Matrix A is modified during computation (contains LU factors on exit)
 		 */
-		template<typename T, SIMD S, const size_t threads = _threads>
+		template<typename T, typename S = decltype(detect_simd())>
 		inline bool
 		inverse(T** A, T** A_inv, const size_t N)
 		{
 			right<T>("inverse: ", std::make_tuple(A, N, N), std::make_tuple(A_inv, N, N));
 			
 			// Perform LU decomposition
-			auto P = aligned_alloc_1D<size_t, S>(N, 1);
+			auto P_mat = aligned_alloc_2D<size_t, S::bytes>(1, N);
+			size_t* P = P_mat[0];
 			
-			if (!lu::decompose<T, S, threads>(A, P.get(), N))
+			if (!lu::decompose<T, S>(A, P, N))
 				return false; // Matrix is singular
 	
-			// possible parallel inversion by solving A x = e_col (i.e., column-wise)
-			// parallel_for(0, N, 1,
-			// 	[&](size_t col)
-			// 	{
-				for (size_t col = 0; col < N; col++)
-				{
-					auto b = aligned_alloc_1D<T, S>(N, 1);
-					auto y = aligned_alloc_1D<T, S>(N, 1);
-					auto x = aligned_alloc_1D<T, S>(N, 1);
+			// Column-wise inversion by solving A x = e_col
+			for (size_t col = 0; col < N; col++)
+			{
+				// Allocate aligned vectors for this column solve
+				auto b_mat = aligned_alloc_2D<T, S::bytes>(1, N);
+				auto y_mat = aligned_alloc_2D<T, S::bytes>(1, N);
+				auto x_mat = aligned_alloc_2D<T, S::bytes>(1, N);
+				T* b = b_mat[0];
+				T* y = y_mat[0];
+				T* x = x_mat[0];
+				
+				std::fill(b, b + N, T(0));
+				
+				// Set up RHS with permutation
+				b[P[col]] = T(1);
 
-					zeros<T, NONE>(b.get(), N, 1);
-					
-					b[P[col]] = T(1);
+				// Solve L * y = b (L has unit diagonal from LU decomposition)
+				tri::forward_substitution<T, S>(A, b, y, N, true);
 
-					// Solve L * y = b
-					tri::forward_substitution<T, S>(A, b.get(), y.get(), N, /*unit_diag=*/true);
+				// Solve U * x = y
+				tri::backward_substitution<T, S>(A, y, x, N, false);
 
-					// Solve U * x = y
-					tri::backward_substitution<T, S>(A, y.get(), x.get(), N, /*unit_diag=*/false);
-
-					for (size_t i = 0; i < N; ++i)
-						A_inv[i][col] = x[i];
-				}
-				// }, 1);
-
+				// Store solution in column of A_inv
+				for (size_t i = 0; i < N; ++i)
+					A_inv[i][col] = x[i];
+			}
 			
 			return true;
-		}
-
-		/**
-		 * \brief LU-based Matrix Inversion with flat array interface.
-		 */
-		template<typename T, SIMD S, const size_t threads = _threads>
-		inline bool
-		inverse(T* A, T* A_inv, const size_t N)
-		{
-			auto A_view = view_as_2D(A, N, N);
-			auto A_inv_view = view_as_2D(A_inv, N, N);
-			return inverse<T, S, threads>(A_view.get(), A_inv_view.get(), N);
 		}
 
 	} // namespace lu
 
 	namespace qr
 	{
-	
-
 		/**
 		 * \brief QR-based Matrix Inversion/Pseudoinverse using SIMD-optimized operations.
 		 *
 		 * Computes the inverse (for square matrices) or Moore-Penrose pseudoinverse 
-		 * (for rectangular matrices) using QR decomposition. This method provides
-		 * better numerical stability for certain matrices and naturally handles
-		 * overdetermined systems.
+		 * (for rectangular matrices) using QR decomposition with Householder reflections.
+		 * This method naturally handles overdetermined/underdetermined systems.
 		 *
 		 * \tparam T        Scalar type (float or double)
-		 * \tparam S        SIMD instruction set (SSE, AVX, AVX512)
-		 * \tparam threads  Number of threads for parallel execution
+		 * \tparam S        SIMD instruction set (SSE, AVX, AVX512, or NONE)
 		 *
-		 * \param A         Input matrix A (M×N), will be overwritten with QR factors
-		 * \param A_inv     Output inverse/pseudoinverse matrix (N×M)
+		 * \param A         Input matrix A (M×N) as 2D pointer array, overwritten with QR factors
+		 * \param A_inv     Output inverse/pseudoinverse matrix (N×M) as 2D pointer array
 		 * \param M         Number of rows in A
 		 * \param N         Number of columns in A
 		 * 
 		 * \return true if inversion successful, false if matrix is rank deficient
 		 *
 		 * \note For square matrices (M=N): computes regular inverse A^(-1)
-		 * \note For overdetermined systems (M>N): computes pseudoinverse A^+ = (A^T*A)^(-1)*A^T
-		 * \note For underdetermined systems (M<N): computes pseudoinverse A^+ = A^T*(A*A^T)^(-1)
+		 * \note For overdetermined (M>N): computes left pseudoinverse A^+ = (A^T*A)^(-1)*A^T
+		 * \note For underdetermined (M<N): computes right pseudoinverse A^+ = A^T*(A*A^T)^(-1)
 		 * \note Matrix A is modified during computation (contains QR factors on exit)
+		 * \note Uses SIMD-optimized QR decomposition from decompose.h
+		 * \note Better numerical properties than LU for ill-conditioned matrices
+		 *
+		 * \warning Fails if matrix is rank deficient (returns false)
+		 * \warning More computationally expensive than LU for well-conditioned square matrices
 		 */
-		template<typename T, SIMD S, const size_t threads = _threads>
+		template<typename T, typename S = decltype(detect_simd())>
 		inline bool
 		inverse(T** A, T** A_inv, const size_t M, const size_t N)
 		{
-			right<T>("inverse: ", std::make_tuple(A, M, N), std::make_tuple(A_inv, M, N));
+			right<T>("inverse:", std::make_tuple(A, M, N), std::make_tuple(A_inv, N, M));
 			
-			// Allocate Q and R matrices
-			auto Q = aligned_alloc_2D<T, static_cast<size_t>(S)>(M, M);
-			auto R = aligned_alloc_2D<T, static_cast<size_t>(S)>(M, N);
+			// Allocate Q and R matrices for QR decomposition
+			auto Q = aligned_alloc_2D<T, S::bytes>(M, M);
+			auto R = aligned_alloc_2D<T, S::bytes>(M, N);
 			
-			// Perform QR decomposition
-			if (!damm::qr::decompose<T, S, threads>(A, Q.get(), R.get(), M, N))
+			// Perform QR decomposition: A = Q * R
+			if (!damm::qr::decompose<T, S>(A, Q.get(), R.get(), M, N))
 				return false; // QR decomposition failed
 			
 			const size_t min_dim = std::min(M, N);
@@ -242,56 +206,60 @@ namespace damm
 			for (size_t i = 0; i < min_dim; ++i) 
 			{
 				if (std::abs(R[i][i]) < tolerance)
-					return false; // Rank deficient
+					return false; // Rank deficient - cannot invert
 			}
 			
 			if (M >= N) 
 			{
-				// Overdetermined case: A^+ = R^(-1) * Q^T
-				// Extract the square upper part of R
-				auto R_inv = aligned_alloc_2D<T, static_cast<size_t>(S)>(N, N);
-								
-				// Invert the square R matrix
-				tri::inverse<T, S, UPPER>(R.get(), R_inv.get(), N);
+				// Overdetermined or square case: A^+ = R^(-1) * Q^T
 				
-				// Compute A^+ = R^(-1) * Q^T
-				// First compute Q^T (transpose first N columns of Q)
-				auto Q_T = aligned_alloc_2D<T, static_cast<size_t>(S)>(N, M);
+				// Extract the square upper part of R (N×N)
+				auto R_square = aligned_alloc_2D<T, S::bytes>(N, N);
+				for (size_t i = 0; i < N; ++i)
+					std::copy(R[i], R[i] + N, R_square[i]);
 				
-				// Extract first N columns of Q and transpose
-				auto Q_sub = aligned_alloc_2D<T, static_cast<size_t>(S)>(M, N);
-						
-				transpose<T, S>(Q.get(), Q_T.get(), M, N);
+				// Invert the upper triangular R matrix
+				auto R_inv = aligned_alloc_2D<T, S::bytes>(N, N);
+				tri::inverse<T, S, TRIANGULAR::UPPER>(R_square.get(), R_inv.get(), N);
 				
-				// Then multiply: A^+ = R^(-1) * Q^T
+				// Compute Q^T by transposing first N columns of Q: (M×N) -> (N×M)
+				auto Q_sub = aligned_alloc_2D<T, S::bytes>(M, N);
+				for (size_t i = 0; i < M; ++i)
+					std::copy(Q[i], Q[i] + N, Q_sub[i]);
+				
+				auto Q_T = aligned_alloc_2D<T, S::bytes>(N, M);
+				transpose<T, S>(Q_sub.get(), Q_T.get(), M, N);
+				
+				// Compute pseudoinverse: A^+ = R^(-1) * Q^T
+				// Dimensions: (N×N) × (N×M) = (N×M)
+				zeros<T, S>(A_inv, N, M);
 				multiply<T, S>(R_inv.get(), Q_T.get(), A_inv, N, N, M);
-				
 			} 
 			else 
 			{
 				// Underdetermined case: A^+ = Q * R^(-1)
-				auto R_inv = aligned_alloc_2D<T, static_cast<size_t>(S)>(M, M);
-					
-				// Invert R
-				tri::inverse<T, S, UPPER>(R.get(), R_inv.get(), M);
+				
+				// Extract the square upper part of R (M×M)
+				auto R_square = aligned_alloc_2D<T, S::bytes>(M, M);
+				for (size_t i = 0; i < M; ++i)
+					std::copy(R[i], R[i] + M, R_square[i]);
+				
+				// Invert the upper triangular R matrix
+				auto R_inv = aligned_alloc_2D<T, S::bytes>(M, M);
+				tri::inverse<T, S, TRIANGULAR::UPPER>(R_square.get(), R_inv.get(), M);
 				
 				// Compute A^+ = Q * R^(-1)
-				multiply<T, S>(Q.get(), R_inv.get(), A_inv, M, M, M);
+				// Dimensions: (M×M) × (M×M) = (M×M)
+				auto temp = aligned_alloc_2D<T, S::bytes>(M, M);
+				zeros<T, S>(temp.get(), M, M);
+				multiply<T, S>(Q.get(), R_inv.get(), temp.get(), M, M, M);
+				
+				// Extract first N rows as output: (N×M)
+				for (size_t i = 0; i < N; ++i)
+					std::copy(temp[i], temp[i] + M, A_inv[i]);
 			}
 			
 			return true;
-		}
-
-		/**
-		 * \brief QR-based Matrix Inversion with flat array interface.
-		 */
-		template<typename T, SIMD S, const size_t threads = _threads>
-		inline bool
-		inverse(T* A, T* A_inv, const size_t M, const size_t N)
-		{
-			auto A_view = view_as_2D(A, M, N);
-			auto A_inv_view = view_as_2D(A_inv, N, M);
-			return inverse<T, S, threads>(A_view.get(), A_inv_view.get(), M, N);
 		}
 
 	} // namespace qr

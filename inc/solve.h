@@ -6,7 +6,6 @@
  * \author cpapakonstantinou
  * \date 2025
  **/
-
 // Copyright (c) 2025  Constantine Papakonstantinou
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,6 +27,8 @@
 // THE SOFTWARE.
 
 #include <common.h>
+#include <damm_memory.h>
+#include <fused_reduce.h>
 
 namespace damm
 {
@@ -49,7 +50,7 @@ namespace damm
 		 * \param N         Dimension.
 		 * \param unit_diag If true, assumes unit diagonal.
 		 */
-		template <typename T, SIMD S>
+		template <typename T, typename S = decltype(detect_simd())>
 		inline __attribute__((always_inline)) 
 		void 
 		forward_substitution(T** L, const T* b, T* y, const size_t N,
@@ -57,10 +58,19 @@ namespace damm
 		{
 			for (size_t i = 0; i < N; ++i)
 			{
-				T sum = (i == 0)
-					? T(0)
-					: fused_reduce<T, std::multiplies<>, std::plus<>, S>(L[i], y, T(0), i, 1);
-
+				T sum = T(0);
+				
+				if (i > 0)
+				{
+					// Need to compute dot product: L[i][0:i] · y[0:i]
+					// Wrap L[i] and y as T** (1D views)
+					auto L_row = view_as_2D(&L[i][0], 1, i);
+					auto y_vec = view_as_2D(const_cast<T*>(y), 1, i);
+					
+					sum = fused_reduce<T, std::multiplies<>, std::plus<>, S>(
+						L_row.get(), y_vec.get(), T(0), 1, i);
+				}
+				
 				y[i] = unit_diag ? (b[i] - sum)
 								 : (b[i] - sum) / L[i][i];
 			}
@@ -76,7 +86,7 @@ namespace damm
 		 * \param N         Dimension.
 		 * \param unit_diag If true, assumes unit diagonal.
 		 */
-		template <typename T, SIMD S>
+		template <typename T, typename S = decltype(detect_simd())>
 		inline __attribute__((always_inline)) 
 		void 
 		backward_substitution(T** U, const T* y, T* x, const size_t N, 
@@ -85,15 +95,23 @@ namespace damm
 			for (size_t i = N; i-- > 0; )
 			{
 				size_t len = N - i - 1;
-				T sum = (len > 0)
-					? fused_reduce<T, std::multiplies<>, std::plus<>, S>(&U[i][i + 1], &x[i + 1], T(0), len, 1)
-					: T(0);
-
+				T sum = T(0);
+				
+				if (len > 0)
+				{
+					// Need to compute dot product: U[i][i+1:N] · x[i+1:N]
+					// Wrap &U[i][i+1] and &x[i+1] as T** (1D views)
+					auto U_row = view_as_2D(&U[i][i + 1], 1, len);
+					auto x_vec = view_as_2D(&x[i + 1], 1, len);
+					
+					sum = fused_reduce<T, std::multiplies<>, std::plus<>, S>(
+						U_row.get(), x_vec.get(), T(0), 1, len);
+				}
+				
 				x[i] = unit_diag ? (y[i] - sum)
 								 : (y[i] - sum) / U[i][i];
 			}
 		}
 	}//namespace tri
 }//namespace damm
-
 #endif //__SOLVE_H__

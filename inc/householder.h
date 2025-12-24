@@ -32,8 +32,11 @@
 #include <cstring>
 #include <algorithm>
 #include <common.h>
-#include <multiply.h>
+#include <damm_memory.h>
+
+#include <transpose.h>
 #include <union.h>
+#include <multiply.h>
 #include <reduce.h>
 #include <fused_reduce.h>
 
@@ -46,7 +49,7 @@
  * Given a reflection vector \p v, the Householder matrix is defined as:
  *     H = I - 2 * (v v^T) / (v^T v)
  *
- * In numerical implementations, the normalized vector is avoided. Instead, we define:
+ * In numerical implementations, the normalized vector is avoided. Instead, define:
  *     H = I - tau * v * v^T
  * where \p tau = 2 / (v^T v), and \p v is chosen such that v[0] = 1.
  */
@@ -62,7 +65,7 @@ namespace damm
 	 * \param tau The output scalar tau such that H = I - tau * v * v^T
 	 * \param beta The scalar that replaces x[0] in H * x
 	 */
-	template<typename T, SIMD S>
+	template<typename T, typename S>
 	void make_householder(T* x, size_t N, T* v, T& tau, T& beta) 
 	{
 		if (N <= 0) 
@@ -82,13 +85,14 @@ namespace damm
 			return;
 		}
 
-		auto x_tail = aligned_alloc_2D<T, static_cast<size_t>(S)>(1, N - 1);
+		auto x_tail_data = aligned_alloc_1D<T, S::bytes>(1, N - 1);
+		auto x_tail = view_as_2D(x_tail_data.get(), 1, N - 1);
 		
 		for (size_t i = 1; i < N; ++i)
 			x_tail[0][i - 1] = x[i];
 
-
-		T norm2 = fused_reduce<T, std::multiplies<>, std::plus<>, S>(x_tail[0], x_tail[0], T(0), 1, N - 1);
+		T norm2 = fused_reduce<T, std::multiplies<>, std::plus<>, S>(
+			x_tail.get(), x_tail.get(), T(0), 1, N - 1);
 
 		if (norm2 == T(0) && x0 >= T(0)) 
 		{
@@ -109,66 +113,65 @@ namespace damm
 
 		v[0] = T(1);
 
-		auto v_tail = aligned_alloc_2D<T, static_cast<size_t>(S)>(1, N - 1);
+		auto v_tail_data = aligned_alloc_1D<T, S::bytes>(1, N - 1);
+		auto v_tail = view_as_2D(v_tail_data.get(), 1, N - 1);
 		
-		scalar::unite<T, std::divides<>, S>(x_tail[0], u0, v_tail[0], 1, N - 1);
+		scalar::unite<T, std::divides<>, S>(
+			x_tail.get(), u0, v_tail.get(), 1, N - 1);
 
 		std::copy(v_tail[0], v_tail[0] + (N - 1), v + 1);
 	}
 
 	/**
-	 * \brief Apply the Householder reflector from the left: A ← (I - τvvᵀ)A
+	 * \brief Apply the Householder reflector from the left
 	 *
-	 * Mathematical: (I - τvvᵀ)A = A - τv(vᵀA)
-	 *
-	 * \param A       The input matrix (modified in-place), size m × n, stored row-major
+	 * \param A       The input matrix (modified in-place), size M × N, stored row-major
 	 * \param M       Rows of A
 	 * \param N       Columns of A
-	 * \param V       Householder vector of length M (v[0] = 1)
-	 * \param tau     The scalar τ from the reflector
+	 * \param v       Householder vector of length M (v[0] = 1)
+	 * \param tau     The scalar tau from the reflector
 	 */
-	template<typename T, SIMD S>
-	void apply_householder_left(T** A, int M, int N, const T* v, T tau)
+	template<typename T, typename S>
+	void apply_householder_left(T** A, size_t M, size_t N, const T* v, T tau)
 	{
-		auto v_mat = aligned_alloc_2D<T, static_cast<size_t>(S)>(M, 1);
-		auto vT_mat = aligned_alloc_2D<T, static_cast<size_t>(S)>(1, M);
-		auto w = aligned_alloc_2D<T, static_cast<size_t>(S)>(1, N);
-		auto outer_prod = aligned_alloc_2D<T, static_cast<size_t>(S)>(M, N);
+		auto v_data = aligned_alloc_1D<T, S::bytes>(1, M);
+		std::copy(v, v + M, v_data.get());
+		
+		auto v_col = view_as_2D(v_data.get(), M, 1);
+		auto vT_row = view_as_2D(v_data.get(), 1, M);
+		
+		auto w = aligned_alloc_2D<T, S::bytes>(1, N);
+		auto outer_prod = aligned_alloc_2D<T, S::bytes>(M, N);
 
-		std::copy(v, v + M, vT_mat[0]);
-
-		transpose<T, S>(vT_mat.get(), v_mat.get(), 1, M);
-
-		multiply<T, S>(vT_mat.get(), A, w.get(), 1, M, N);
+		multiply<T, S>(vT_row.get(), A, w.get(), 1, M, N);
 
 		scalar::unite<T, std::multiplies<>, S>(w.get(), tau, w.get(), 1, N);
 
-		multiply<T, S>(v_mat.get(), w.get(), outer_prod.get(), M, 1, N);
+		multiply<T, S>(v_col.get(), w.get(), outer_prod.get(), M, 1, N);
 
 		matrix::unite<T, std::minus<>, S>(A, outer_prod.get(), A, M, N);
 	}
 
 	/**
-	 * \brief Apply the Householder reflector from the right: A ← A(I - τvvᵀ)
+	 * \brief Apply the Householder reflector from the right.
 	 *
-	 * Mathematical: A(I - τvvᵀ) = A - τ(Av)vᵀ
-	 *
-	 * \param A       The input matrix (modified in-place), size m × n, stored row-major
+	 * \param A       The input matrix (modified in-place), size M × N, stored row-major
 	 * \param M       Number of rows of A
 	 * \param N       Number of columns of A
-	 * \param v       Householder vector of length n (v[0] = 1)
-	 * \param tau     The scalar τ from the reflector
+	 * \param v       Householder vector of length N (v[0] = 1)
+	 * \param tau     The scalar tau from the reflector
 	 */
-	template <typename T, SIMD S>
+	template <typename T, typename S>
 	void apply_householder_right(T** A, size_t M, size_t N, const T* v, T tau) 
 	{
-		auto v_col = aligned_alloc_2D<T, static_cast<size_t>(S)>(N, 1);
-		auto v_row = aligned_alloc_2D<T, static_cast<size_t>(S)>(1, N);
-		auto w_col = aligned_alloc_2D<T, static_cast<size_t>(S)>(M, 1);
-		auto outer_prod = aligned_alloc_2D<T, static_cast<size_t>(S)>(M, N);
-
-		std::copy(v, v + N, v_col[0]);
-		std::copy(v, v + N, v_row[0]);
+		auto v_data = aligned_alloc_1D<T, S::bytes>(1, N);
+		std::copy(v, v + N, v_data.get());
+		
+		auto v_col = view_as_2D(v_data.get(), N, 1);
+		auto v_row = view_as_2D(v_data.get(), 1, N);
+		
+		auto w_col = aligned_alloc_2D<T, S::bytes>(M, 1);
+		auto outer_prod = aligned_alloc_2D<T, S::bytes>(M, N);
 
 		multiply<T, S>(A, v_col.get(), w_col.get(), M, N, 1);
 

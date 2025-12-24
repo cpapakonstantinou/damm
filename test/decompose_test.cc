@@ -4,30 +4,13 @@
  * \author cpapakonstantinou
  * \date 2025
  */
-// Copyright (c) 2025  Constantine Papakonstantinou
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
 #include <iostream>
 #include <iomanip>
 #include <random>
 #include <chrono>
+
 #include "test_utils.h"
+#include "broadcast.h"
 #include "decompose.h"
 #include "carray.h"
 #include "oracle.h"
@@ -40,19 +23,19 @@ using U = std::string_view;
 int oracle::log_level = LOG_INFO;
 bool oracle::use_syslog = false;
 
-template<typename T, SIMD S>
+template<typename T, typename S>
 std::expected<E, U> 
 lu_decomposition(void* instructions) 
 {
 	constexpr size_t N = 4;
 	constexpr T tolerance = std::is_same_v<T, float> ? 1e-6f : 1e-12;
 	
-	auto A = carray<T, 2, S>(N, N);
-	auto L = carray<T, 2, S>(N, N);
-	auto U = carray<T, 2, S>(N, N);
-	auto LU = carray<T, 2, S>(N, N);
-	auto PA = carray<T, 2, S>(N, N);  // Permuted A matrix
-	auto LU_result = carray<T, 2, S>(N, N);  // L*U result
+	auto A = carray<T, 2, S::bytes>(N, N);
+	auto L = carray<T, 2, S::bytes>(N, N);
+	auto U = carray<T, 2, S::bytes>(N, N);
+	auto LU = carray<T, 2, S::bytes>(N, N);
+	auto PA = carray<T, 2, S::bytes>(N, N);  // Permuted A matrix
+	auto LU_result = carray<T, 2, S::bytes>(N, N);  // L*U result
 	
 	// Initialize test matrix
 	T A_data[N][N] = {
@@ -120,16 +103,16 @@ lu_decomposition(void* instructions)
 	return 0;
 }
 
-template<typename T, SIMD S>
+template<typename T, typename S>
 std::expected<E, U>
 qr_decomposition(void* instructions) 
 {	
 	constexpr size_t M = 4, N = 3;
 	constexpr T tolerance = std::is_same_v<T, float> ? 1e-6f : 1e-12;
 	
-	auto A = carray<T, 2, S>(M, N);
-	auto Q = carray<T, 2, S>(M, M);
-	auto R = carray<T, 2, S>(M, N);
+	auto A = carray<T, 2, S::bytes>(M, N);
+	auto Q = carray<T, 2, S::bytes>(M, M);
+	auto R = carray<T, 2, S::bytes>(M, N);
 	
 	// Initialize test matrix (overdetermined system)
 	T A_data[4][3] = \
@@ -155,13 +138,13 @@ qr_decomposition(void* instructions)
 		return std::unexpected{"decomposition failed"};
 	}
 
-	carray<T, 2, S> QTQ(M, M);
-	carray<T, 2, S> Q_transpose(M, M);
+	carray<T, 2, S::bytes> QTQ(M, M);
+	carray<T, 2, S::bytes> Q_transpose(M, M);
 	
 	transpose<T, S>(Q.get(), Q_transpose.get(), M, M);
 	multiply<T, S>(Q_transpose.get(), Q.get(), QTQ.get(), M, M, M);
 
-	carray<T, 2, S> I(M, N);
+	carray<T, 2, S::bytes> I(M, N);
 	set_identity(I.get(), M, N);
 	T orthogonality_error = matrix_max_error<T>(QTQ.get(), I.get(), M, N);
 
@@ -172,7 +155,7 @@ qr_decomposition(void* instructions)
 		return std::unexpected{response};
 	}
 
-	carray<T, 2, S> QR(M, N);
+	carray<T, 2, S::bytes> QR(M, N);
 	multiply<T, S>(Q.get(), R.get(), QR.get(), M, M, N);
 	T reconstruction_error = matrix_max_error(A.get(), QR.get(), M, N);
 	
@@ -191,11 +174,10 @@ int main(int argc, char* argv[])
 {
 
 	using T = double;
-	constexpr SIMD S = AVX512;
 
 	oracle::Heracles<E, U> heracles{};
-	heracles.add_labor(0, "lu::decompose", &lu_decomposition<T, S>, nullptr);
-	heracles.add_labor(1, "qr::decompose", &qr_decomposition<T, S>, nullptr);
+	heracles.add_labor(0, "lu::decompose", &lu_decomposition<T, AVX512>, nullptr);
+	heracles.add_labor(1, "qr::decompose", &qr_decomposition<T, AVX512>, nullptr);
 
 	try 
 	{

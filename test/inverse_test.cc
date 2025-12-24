@@ -2,25 +2,6 @@
  * \file inverse_test.cc
  * \brief unit test for inverse module
  */
-// Copyright (c) 2025  Constantine Papakonstantinou
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
 #include <random>
 #include <chrono>
 
@@ -37,16 +18,16 @@ using U = std::string_view;
 bool oracle::use_syslog = false;
 int oracle::log_level = LOG_INFO;
 
-template<typename T, SIMD S>
+template<typename T, typename S>
 std::expected<E, U> 
 lu_inverse(void* instructions) 
 {
 	constexpr size_t N = 4;
 	constexpr T tolerance = std::is_same_v<T, float> ? 1e-6f : 1e-12;
 	
-	auto A = aligned_alloc_2D<T, S>(N, N);
-	auto A_lu = aligned_alloc_2D<T, S>(N, N);
-	auto A_inv = aligned_alloc_2D<T, S>(N, N);
+	auto A = aligned_alloc_2D<T, S::bytes>(N, N);
+	auto A_lu = aligned_alloc_2D<T, S::bytes>(N, N);
+	auto A_inv = aligned_alloc_2D<T, S::bytes>(N, N);
 	
 	T A_data[4][4] = {
 		{4, 1, 2, 1},
@@ -74,8 +55,8 @@ lu_inverse(void* instructions)
 	}
 
 	// Compare accuracy: compute A * A_inv - I for both methods
-	auto I = aligned_alloc_2D<T, S>(N, N);
-	auto I_lu = aligned_alloc_2D<T, S>(N, N);
+	auto I = aligned_alloc_2D<T, S::bytes>(N, N);
+	auto I_lu = aligned_alloc_2D<T, S::bytes>(N, N);
 	
 	set_identity(I.get(), N, N);
 
@@ -93,16 +74,16 @@ lu_inverse(void* instructions)
 	return 0;
 }
 
-template<typename T, SIMD S>
+template<typename T, typename S>
 std::expected<E, U> 
 qr_inverse(void* instructions) 
 {
 	constexpr size_t N = 4, M = 4;
 	constexpr T tolerance = std::is_same_v<T, float> ? 1e-6f : 1e-12;
 	
-	auto A = aligned_alloc_2D<T, S>(M, N);	
-	auto A_qr = aligned_alloc_2D<T, S>(M, N);
-	auto A_inv = aligned_alloc_2D<T, S>(M, N);
+	auto A = aligned_alloc_2D<T, S::bytes>(M, N);	
+	auto A_qr = aligned_alloc_2D<T, S::bytes>(M, N);
+	auto A_inv = aligned_alloc_2D<T, S::bytes>(M, N);
 	
 	T A_data[M][N] = {
 		{4, 1, 2, 1},
@@ -128,8 +109,8 @@ qr_inverse(void* instructions)
 		return std::unexpected("matrix is singular");
 	}
 	// Compare accuracy: compute A * A_inv - I for both methods
-	auto I = aligned_alloc_2D<T, S>(N, N);
-	auto I_qr = aligned_alloc_2D<T, S>(M, N);
+	auto I = aligned_alloc_2D<T, S::bytes>(N, N);
+	auto I_qr = aligned_alloc_2D<T, S::bytes>(M, N);
 	set_identity(I.get(), N, N);
 	
 	multiply<T>(A.get(), A_inv.get(), I_qr.get(), M, N, N);
@@ -149,13 +130,12 @@ qr_inverse(void* instructions)
 int main(int argc, char* argv[]) 
 {
 	using T = double;
-	constexpr SIMD S = AVX512;
 	try 
 	{
 		oracle::Heracles<E, U> heracles{};
 
-		heracles.add_labor(0, "LU inverse", &lu_inverse<T, S>, nullptr);
-		heracles.add_labor(1, "QR inverse", &qr_inverse<T, S>, nullptr);
+		heracles.add_labor(0, "LU inverse", &lu_inverse<T, AVX512>, nullptr);
+		heracles.add_labor(1, "QR inverse", &qr_inverse<T, AVX512>, nullptr);
 
 		heracles.perform_labors();
 
