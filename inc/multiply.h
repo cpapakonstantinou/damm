@@ -361,13 +361,18 @@ namespace damm
 			std::make_tuple(B, N, P), 
 			std::make_tuple(C, M, P));
 
-		auto At = aligned_alloc_2D<T, S::bytes>(N, M);
-		transpose<T, S>(A, At.get(), M, N);
-
-		if constexpr (std::is_same_v<S, NONE>) 
-			_multiply<T, true, K>(At.get(), B, C, M, N, P);
+		if constexpr (std::is_same_v<S, NONE>)
+		{
+			auto Bt = aligned_alloc_2D<T, S::bytes>(P, N);
+			transpose<T, S>(B, Bt.get(), N, P);
+			_multiply<T, true, K>(A, Bt.get(), C, M, N, P);
+		} 
 		else
+		{
+			auto At = aligned_alloc_2D<T, S::bytes>(N, M);
+			transpose<T, S>(A, At.get(), M, N);
 			_multiply_simd<T, S, K>(At.get(), B, C, M, N, P);
+		}
 	}
 
 }//namespace damm
