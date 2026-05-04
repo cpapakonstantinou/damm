@@ -30,7 +30,7 @@ void test_all_kernels(const size_t M, const size_t N)
 	
 	broadcast_naive<T>(A_ref.get(), T(1), M, N);
 	
-	print_perf_header("Broadcast", typeid(T).name(), SIMD_WIDTH, std"GFLOPS");
+	print_perf_header("Broadcast", typeid(T).name(), SIMD_WIDTH, "GFLOPS");
 
 	test_broadcast_kernel<T, S, 1, 1>(A_ref.get(), A_test.get(), M, N);
 	test_broadcast_kernel<T, S, 1, 2>(A_ref.get(), A_test.get(), M, N);

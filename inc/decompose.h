@@ -32,13 +32,10 @@
 #include <cmath>
 #include <common.h>
 #include <damm_memory.h>
-#include <fused_union.h>
-#include <union.h>
-#include <reduce.h>
-#include <multiply.h>
-#include <transpose.h>
-#include <householder.h>
 #include <broadcast.h>
+#include <union.h>
+#include <fused_union.h>
+#include <householder.h>
 
 namespace damm
 {

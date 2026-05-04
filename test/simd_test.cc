@@ -6,6 +6,7 @@
  */
 #include "test_utils.h"
 #include "carray.h"
+#include "damm_kernels.h"
 #include "simd.h"
 #include <complex>
 #include <format>
@@ -17,26 +18,26 @@ template<typename T, typename S, template<typename, typename> class P>
 void 
 load_store_naive(T** src, T** dst)
 {
-	constexpr size_t rows = P<T, S>::block_rows();
-	constexpr size_t cols = P<T, S>::block_cols();
+	constexpr size_t rows = P<T, S>::kernel_rows();
+	constexpr size_t cols = P<T, S>::kernel_cols();
 	
 	for (size_t i = 0; i < rows; ++i)
 		for (size_t j = 0; j < cols; ++j)
 			dst[i][j] = src[i][j];
 }
 
-template<typename T, typename S, template<typename, typename> class P>
+template<typename T, typename S, template<typename, typename> class K>
 bool
 test_load_store_aligned(const size_t M, const size_t N)
 { 
 	static constexpr size_t ALIGN = 64;
 	bool ret = true;
-	
-	constexpr size_t rows = P<T, S>::row_registers;
-	constexpr size_t cols = P<T, S>::col_registers;
-	constexpr size_t elements = P<T, S>::register_elements();
-	constexpr size_t block_h = P<T, S>::block_rows();
-	constexpr size_t block_w = P<T, S>::block_cols();
+	using kernel_t = K<T, S>;
+	constexpr size_t rows = kernel_t::row_registers;
+	constexpr size_t cols = kernel_t::col_registers;
+	constexpr size_t elements = kernel_t::register_elements();
+	constexpr size_t block_h = kernel_t::kernel_rows();
+	constexpr size_t block_w = kernel_t::kernel_cols();
 	
 	if (M < block_h || N < block_w) 
 	{
@@ -65,11 +66,11 @@ test_load_store_aligned(const size_t M, const size_t N)
 	}
 	
 	// Reference: naive copy
-	load_store_naive<T, S, P>(src.get(), dst_ref.get());
+	load_store_naive<T, S, K>(src.get(), dst_ref.get());
 	
 	// Test: SIMD load and store
-	load<T, S, P>(src.get(), registers, 0, 0);
-	store<T, S, P>(dst_test.get(), registers, 0, 0);
+	load<T, S, K>(src.get(), registers, 0, 0);
+	store<T, S, K>(dst_test.get(), registers, 0, 0);
 	
 	// Compare only the processed block
 	ret &= is_same<T>(

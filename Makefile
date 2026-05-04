@@ -7,14 +7,14 @@ TARGET_SONAME := lib$(TARGET).so.$(MAJOR_VER)
 TARGET := lib$(TARGET).so.$(MAJOR_VER).$(MINOR_VER)
 SRC = transpose.cc #multiply.cc #union.cc reduce.cc fused_union.cc broadcast.cc fused_reduce.cc
 
-PREFIX ?= /usr/lib
-INSTALLDIR ?= $(PREFIX)/damm
-HEADERS = inc/*.h
-
 #Directories
 SRCDIR = src
 INCDIR = inc
 TESTDIR = test
+PREFIX ?= /usr
+INSTALL_LIB ?= $(PREFIX)/lib/damm
+INSTALL_INC ?= $(PREFIX)/include/damm
+HEADERS = $(INCDIR)/*.h
 
 #Toolchains
 CXX = g++-13
@@ -34,15 +34,23 @@ LDLIBS =
 TEST_LDFLAGS = -L ./ -Wl,-rpath=.
 TEST_LDLIBS = -ldamm
 TEST_TARGETS = simd_test \
-				broadcast_test broadcast_perf \
-				multiply_test multiply_perf \
-				transpose_test transpose_perf \
-				reduce_test reduce_perf \
-				union_test union_perf \
-				fused_reduce_test fused_reduce_perf \
-				fused_union_test fused_union_perf \
+				broadcast_test \
+				multiply_test \
+				transpose_test \
+				reduce_test \
+				union_test \
+				fused_reduce_test \
+				fused_union_test \
 				householder_test inverse_test decompose_test
-				
+
+PERF_TARGETS =  broadcast_perf \
+				multiply_perf \
+				transpose_perf \
+				reduce_perf \
+				union_perf \
+				fused_reduce_perf \
+				fused_union_perf \
+
 TEST_SOURCES = $(TEST_TARGETS:%=%.$(CXX_SUFFIX))
 
 #Shell type
@@ -62,11 +70,12 @@ $(TARGET): $(OBJ)
 $(TEST_TARGETS): %: $(TESTDIR)/%.o $(TARGET)
 	$(LD) -o $@ $(TESTDIR)/$@.o $(TEST_LDFLAGS) $(TEST_LDLIBS)
 
+$(PERF_TARGETS): %: $(TESTDIR)/%.o $(TARGET)
+	$(LD) -o $@ $(TESTDIR)/$@.o $(TEST_LDFLAGS) $(TEST_LDLIBS)
+
 unit_test:$(TEST_TARGETS)
 	for test in $(TEST_TARGETS); do \
-		if [[ "test" == *"$$test"* ]]; then \
-			./$$test  \
-		fi \
+		./$$test;  \
 	done;
 
 clean:
@@ -76,14 +85,15 @@ cleanall: clean
 	$(RM) $(TARGET) $(TARGET_SYMLINK) $(TARGET_SONAME) $(TEST_TARGETS) 
 
 install: $(TARGET) $(HEADERS)
-	install -d $(INSTALLDIR)
-	install -m 644 $(HEADERS) $(INSTALLDIR)
-	install -m 755 $(TARGET_SYMLINK) $(INSTALLDIR)
-	install -m 755 $(TARGET_SONAME) $(INSTALLDIR)
-	install -m 755 $(TARGET) $(INSTALLDIR)
+	install -d $(INSTALL_LIB)
+	install -d $(INSTALL_INC)
+	install -m 644 $(HEADERS) $(INSTALL_INC)
+	install -m 755 $(TARGET_SYMLINK) $(INSTALL_LIB)
+	install -m 755 $(TARGET_SONAME) $(INSTALL_LIB)
+	install -m 755 $(TARGET) $(INSTALL_LIB)
 
 uninstall:
-	$(RM) -r $(INSTALLDIR)
+	$(RM) -r $(INSTALL_LIB) $(INSTALL_INC)
 
 .PHONY: all clean help $(TEST_TARGETS) $(TARGET) 
 

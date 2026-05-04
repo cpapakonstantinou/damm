@@ -267,6 +267,9 @@ namespace damm
 		const size_t simd_M = M - (M % kernel_rows);
 		const size_t simd_N = N - (N % kernel_rows);
 		const size_t simd_P = P - (P % kernel_cols);
+
+		auto At = aligned_alloc_2D<T, S::bytes>(N, M);
+		transpose<T, S>(A, At.get(), M, N);
 	
 		#pragma omp parallel
 		{			
@@ -293,7 +296,7 @@ namespace damm
 							for (size_t j = 0; j < (j_end - j_block); j += kernel_cols)
 							{
 								_multiply_block_simd<T, S, K>(
-											A, B, C,
+											At.get(), B, C,
 											i_block + i,      // row
 											j_block + j,      // col
 											k_block, k_end    // k_start, k_end
@@ -369,9 +372,7 @@ namespace damm
 		} 
 		else
 		{
-			auto At = aligned_alloc_2D<T, S::bytes>(N, M);
-			transpose<T, S>(A, At.get(), M, N);
-			_multiply_simd<T, S, K>(At.get(), B, C, M, N, P);
+			_multiply_simd<T, S, K>(A, B, C, M, N, P);
 		}
 	}
 

@@ -87,6 +87,8 @@ lu_decomposition(void* instructions)
 		for (size_t j = 0; j < N; ++j)
 			PA[i][j] = A[P[i]][j];
 
+	zeros<T, S>(LU_result.get(), N, N);
+
 	multiply<T, S>(L.get(), U.get(), LU_result.get(), N, N, N);
 	T max_error = matrix_max_error(A.get(), LU_result.get(), N, N);
 
@@ -113,6 +115,9 @@ qr_decomposition(void* instructions)
 	auto A = carray<T, 2, S::bytes>(M, N);
 	auto Q = carray<T, 2, S::bytes>(M, M);
 	auto R = carray<T, 2, S::bytes>(M, N);
+
+	zeros<T, S>(Q.get(), M, M);
+	zeros<T, S>(R.get(), M, N);
 	
 	// Initialize test matrix (overdetermined system)
 	T A_data[4][3] = \
@@ -142,10 +147,15 @@ qr_decomposition(void* instructions)
 	carray<T, 2, S::bytes> Q_transpose(M, M);
 	
 	transpose<T, S>(Q.get(), Q_transpose.get(), M, M);
+
+	zeros<T, S>(QTQ.get(), M, M);
+
 	multiply<T, S>(Q_transpose.get(), Q.get(), QTQ.get(), M, M, M);
 
 	carray<T, 2, S::bytes> I(M, N);
-	set_identity(I.get(), M, N);
+
+	identity<T, S>(I.get(), M, N);
+
 	T orthogonality_error = matrix_max_error<T>(QTQ.get(), I.get(), M, N);
 
 	if(orthogonality_error > tolerance)
@@ -156,6 +166,9 @@ qr_decomposition(void* instructions)
 	}
 
 	carray<T, 2, S::bytes> QR(M, N);
+
+	zeros<T, S>(QR.get(), M, N);
+
 	multiply<T, S>(Q.get(), R.get(), QR.get(), M, M, N);
 	T reconstruction_error = matrix_max_error(A.get(), QR.get(), M, N);
 	

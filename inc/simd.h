@@ -133,46 +133,28 @@ namespace damm
 		constexpr size_t rows = kernel::row_registers;
 		constexpr size_t cols = kernel::col_registers;
 		constexpr size_t elems = kernel::register_elements();
-			
-		// Check alignment based on the column offset
-		if ((col_offset * sizeof(T)) % S::bytes == 0)
+ 
+		// Always use unaligned loads. The actual address loaded is
+		// The row pointer's alignment depends on the matrix's row stride. 
+		// On modern arch, the unaligned move instruction has the
+		// same throughput and latency as the aligned one when the address
+		// happens to be aligned, so this change has no measurable cost for
+		// well-aligned inputs and makes the helper safe for arbitrary M, N.
+		static_for<rows>([&]<auto i>()
 		{
-			// Aligned load
-			static_for<rows>([&]<auto i>()
+			static_for<cols>([&]<auto j>()
 			{
-				static_for<cols>([&]<auto j>()
+				if constexpr (!std::is_same_v<T, std::complex<typename base<T>::type>>)
 				{
-					if constexpr (!std::is_same_v<T, std::complex<typename base<T>::type>>)
-					{
-						registers[i][j] = _load<T, S>(&ptr[row_offset + i][col_offset + j * elems]);
-					}
-					else 
-					{
-						auto* base_ptr = reinterpret_cast<typename base<T>::type*>(&ptr[row_offset + i][col_offset]);
-						registers[i][j] = _load<T, S>(&base_ptr[j * elems * 2]);
-					}
-				});
-			});
-		}
-		else
-		{
-			// Unaligned load
-			static_for<rows>([&]<auto i>()
-			{
-				static_for<cols>([&]<auto j>()
+					registers[i][j] = _loadu<T, S>(&ptr[row_offset + i][col_offset + j * elems]);
+				}
+				else
 				{
-					if constexpr (!std::is_same_v<T, std::complex<typename base<T>::type>>)
-					{
-						registers[i][j] = _loadu<T, S>(&ptr[row_offset + i][col_offset + j * elems]);
-					}
-					else 
-					{
-						auto* base_ptr = reinterpret_cast<typename base<T>::type*>(&ptr[row_offset + i][col_offset]);
-						registers[i][j] = _loadu<T, S>(&base_ptr[j * elems * 2]);
-					}
-				});
+					auto* base_ptr = reinterpret_cast<typename base<T>::type*>(&ptr[row_offset + i][col_offset]);
+					registers[i][j] = _loadu<T, S>(&base_ptr[j * elems * 2]);
+				}
 			});
-		}
+		});
 	}
 
 	/* STORE */
@@ -217,46 +199,26 @@ namespace damm
 		constexpr size_t rows = kernel::row_registers;
 		constexpr size_t cols = kernel::col_registers;
 		constexpr size_t elems = kernel::register_elements();
-				
-		// Check alignment based on the column offset
-		if ((col_offset * sizeof(T)) % S::bytes == 0)
+ 
+		// Always use unaligned stores.
+		// the aligned/unaligned dispatch based on column offsets alone is not
+		// safe when row pointers don't share the column's alignment, and
+		// the unaligned store has equivalent performance on aligned data.
+		static_for<rows>([&]<auto i>()
 		{
-			// Aligned store
-			static_for<rows>([&]<auto i>()
+			static_for<cols>([&]<auto j>()
 			{
-				static_for<cols>([&]<auto j>()
+				if constexpr (!std::is_same_v<T, std::complex<typename base<T>::type>>)
 				{
-					if constexpr (!std::is_same_v<T, std::complex<typename base<T>::type>>)
-					{
-						_store<T, S>(&ptr[row_offset + i][col_offset + j * elems], registers[i][j]);
-					}
-					else 
-					{
-						auto* base_ptr = reinterpret_cast<typename base<T>::type*>(&ptr[row_offset + i][col_offset]);
-						_store<T, S>(&base_ptr[j * elems * 2], registers[i][j]);
-					}
-				});
-			});
-		}
-		else
-		{
-			// Unaligned store
-			static_for<rows>([&]<auto i>()
-			{
-				static_for<cols>([&]<auto j>()
+					_storeu<T, S>(&ptr[row_offset + i][col_offset + j * elems], registers[i][j]);
+				}
+				else
 				{
-					if constexpr (!std::is_same_v<T, std::complex<typename base<T>::type>>)
-					{
-						_storeu<T, S>(&ptr[row_offset + i][col_offset + j * elems], registers[i][j]);
-					}
-					else 
-					{
-						auto* base_ptr = reinterpret_cast<typename base<T>::type*>(&ptr[row_offset + i][col_offset]);
-						_storeu<T, S>(&base_ptr[j * elems * 2], registers[i][j]);
-					}
-				});
+					auto* base_ptr = reinterpret_cast<typename base<T>::type*>(&ptr[row_offset + i][col_offset]);
+					_storeu<T, S>(&base_ptr[j * elems * 2], registers[i][j]);
+				}
 			});
-		}
+		});
 	}
 
 	/* BROADCAST */
@@ -920,17 +882,61 @@ namespace damm
 
 	/* FMS - Fused Multiply-Subtract*/
 
+	inline __m128
+	_mm_fmsubc_ps(const __m128& a, const __m128& b, const __m128& c)
+	{
+			return _mm_sub_ps(_mm_mulc_ps(a, b), c);
+	}
+
+	inline __m128d
+	_mm_fmsubc_pd(const __m128d& a, const __m128d& b, const __m128d& c)
+	{
+			return _mm_sub_pd(_mm_mulc_pd(a, b), c);
+	}
+
+	inline __m256
+	_mm256_fmsubc_ps(const __m256& a, const __m256& b, const __m256& c)
+	{
+			return _mm256_sub_ps(_mm256_mulc_ps(a, b), c);
+	}
+
+	inline __m256d
+	_mm256_fmsubc_pd(const __m256d& a, const __m256d& b, const __m256d& c)
+	{
+			return _mm256_sub_pd(_mm256_mulc_pd(a, b), c);
+	}
+
+	inline __m512
+	_mm512_fmsubc_ps(const __m512& a, const __m512& b, const __m512& c)
+	{
+			return _mm512_sub_ps(_mm512_mulc_ps(a, b), c);
+	}
+
+	inline __m512d
+	_mm512_fmsubc_pd(const __m512d& a, const __m512d& b, const __m512d& c)
+	{
+			return _mm512_sub_pd(_mm512_mulc_pd(a, b), c);
+	}
+
+
 	template<typename T, typename S>
 	inline constexpr auto _fmsub = nullptr;
 
 	template<> inline constexpr auto _fmsub<float, SSE> = _mm_fmsub_ps;
 	template<> inline constexpr auto _fmsub<double, SSE> = _mm_fmsub_pd;
+	template<> inline constexpr auto _fmsub<std::complex<float>, SSE> = _mm_fmsubc_ps;
+	template<> inline constexpr auto _fmsub<std::complex<double>, SSE> = _mm_fmsubc_pd;
 
 	template<> inline constexpr auto _fmsub<float, AVX> = _mm256_fmsub_ps;
 	template<> inline constexpr auto _fmsub<double, AVX> = _mm256_fmsub_pd;
+	template<> inline constexpr auto _fmsub<std::complex<float>, AVX> = _mm256_fmsubc_ps;
+	template<> inline constexpr auto _fmsub<std::complex<double>, AVX> = _mm256_fmsubc_pd;
 
 	template<> inline constexpr auto _fmsub<float, AVX512> = _mm512_fmsub_ps;
 	template<> inline constexpr auto _fmsub<double, AVX512> = _mm512_fmsub_pd;
+	template<> inline constexpr auto _fmsub<std::complex<float>, AVX512> = _mm512_fmsubc_ps;
+	template<> inline constexpr auto _fmsub<std::complex<double>, AVX512> = _mm512_fmsubc_pd;
+
 
 	/* FMADDSUB */
 
@@ -963,18 +969,60 @@ namespace damm
 
 	/* FNMADD - Fused Negated Multiply-Add: -(a*b) + c = c - a*b */
 
+	inline __m128
+	_mm_fnmaddc_ps(const __m128& a, const __m128& b, const __m128& c)
+	{
+			return _mm_sub_ps(c, _mm_mulc_ps(a, b));
+	}
+
+	inline __m128d
+	_mm_fnmaddc_pd(const __m128d& a, const __m128d& b, const __m128d& c)
+	{
+			return _mm_sub_pd(c, _mm_mulc_pd(a, b));
+	}
+
+	inline __m256
+	_mm256_fnmaddc_ps(const __m256& a, const __m256& b, const __m256& c)
+	{
+			return _mm256_sub_ps(c, _mm256_mulc_ps(a, b));
+	}
+
+	inline __m256d
+	_mm256_fnmaddc_pd(const __m256d& a, const __m256d& b, const __m256d& c)
+	{
+			return _mm256_sub_pd(c, _mm256_mulc_pd(a, b));
+	}
+
+	inline __m512
+	_mm512_fnmaddc_ps(const __m512& a, const __m512& b, const __m512& c)
+	{
+			return _mm512_sub_ps(c, _mm512_mulc_ps(a, b));
+	}
+
+	inline __m512d
+	_mm512_fnmaddc_pd(const __m512d& a, const __m512d& b, const __m512d& c)
+	{
+			return _mm512_sub_pd(c, _mm512_mulc_pd(a, b));
+	}
+
 	template<typename T, typename S>
 	inline constexpr auto _fnmadd = nullptr;
 
 	template<> inline constexpr auto _fnmadd<float, SSE> = _mm_fnmadd_ps;
 	template<> inline constexpr auto _fnmadd<double, SSE> = _mm_fnmadd_pd;
-	
+	template<> inline constexpr auto _fnmadd<std::complex<float>, SSE> = _mm_fnmaddc_ps;
+	template<> inline constexpr auto _fnmadd<std::complex<double>, SSE> = _mm_fnmaddc_pd;
+
 	template<> inline constexpr auto _fnmadd<float, AVX> = _mm256_fnmadd_ps;
 	template<> inline constexpr auto _fnmadd<double, AVX> = _mm256_fnmadd_pd;
-	
+	template<> inline constexpr auto _fnmadd<std::complex<float>, AVX> = _mm256_fnmaddc_ps;
+	template<> inline constexpr auto _fnmadd<std::complex<double>, AVX> = _mm256_fnmaddc_pd;
+
 	template<> inline constexpr auto _fnmadd<float, AVX512> = _mm512_fnmadd_ps;
 	template<> inline constexpr auto _fnmadd<double, AVX512> = _mm512_fnmadd_pd;
-	
+	template<> inline constexpr auto _fnmadd<std::complex<float>, AVX512> = _mm512_fnmaddc_ps;
+	template<> inline constexpr auto _fnmadd<std::complex<double>, AVX512> = _mm512_fnmaddc_pd;
+
 	/* FNMSUB - Fused Negated Multiply-Subtract: -(a*b) - c = -(a*b + c) */
 
 	template<typename T, typename S>

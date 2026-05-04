@@ -34,6 +34,7 @@
 #include <common.h>
 #include <damm_memory.h>
 
+#include <broadcast.h>
 #include <transpose.h>
 #include <union.h>
 #include <multiply.h>
@@ -136,19 +137,17 @@ namespace damm
 	{
 		auto v_data = aligned_alloc_1D<T, S::bytes>(1, M);
 		std::copy(v, v + M, v_data.get());
-		
 		auto v_col = view_as_2D(v_data.get(), M, 1);
 		auto vT_row = view_as_2D(v_data.get(), 1, M);
-		
 		auto w = aligned_alloc_2D<T, S::bytes>(1, N);
 		auto outer_prod = aligned_alloc_2D<T, S::bytes>(M, N);
 
+		zeros<T, S>(w.get(), 1, N);
+	    zeros<T, S>(outer_prod.get(), M, N);
 		multiply<T, S>(vT_row.get(), A, w.get(), 1, M, N);
 
 		scalar::unite<T, std::multiplies<>, S>(w.get(), tau, w.get(), 1, N);
-
 		multiply<T, S>(v_col.get(), w.get(), outer_prod.get(), M, 1, N);
-
 		matrix::unite<T, std::minus<>, S>(A, outer_prod.get(), A, M, N);
 	}
 
@@ -166,19 +165,17 @@ namespace damm
 	{
 		auto v_data = aligned_alloc_1D<T, S::bytes>(1, N);
 		std::copy(v, v + N, v_data.get());
-		
 		auto v_col = view_as_2D(v_data.get(), N, 1);
 		auto v_row = view_as_2D(v_data.get(), 1, N);
-		
 		auto w_col = aligned_alloc_2D<T, S::bytes>(M, 1);
 		auto outer_prod = aligned_alloc_2D<T, S::bytes>(M, N);
+		
+		zeros<T, S>(w_col.get(), M, 1);
+    	zeros<T, S>(outer_prod.get(), M, N);
 
 		multiply<T, S>(A, v_col.get(), w_col.get(), M, N, 1);
-
 		scalar::unite<T, std::multiplies<>, S>(w_col.get(), tau, w_col.get(), M, 1);
-
 		multiply<T, S>(w_col.get(), v_row.get(), outer_prod.get(), M, 1, N);
-
 		matrix::unite<T, std::minus<>, S>(A, outer_prod.get(), A, M, N);
 	}
 

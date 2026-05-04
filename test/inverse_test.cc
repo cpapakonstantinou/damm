@@ -6,6 +6,7 @@
 #include <chrono>
 
 #include "test_utils.h"
+#include "broadcast.h"
 #include "inverse.h"
 #include "oracle.h"
 #include "heracles.h"
@@ -57,8 +58,9 @@ lu_inverse(void* instructions)
 	// Compare accuracy: compute A * A_inv - I for both methods
 	auto I = aligned_alloc_2D<T, S::bytes>(N, N);
 	auto I_lu = aligned_alloc_2D<T, S::bytes>(N, N);
-	
-	set_identity(I.get(), N, N);
+
+	identity<T, S>(I.get(), N, N);
+	zeros<T, S>(I_lu.get(), N, N);
 
 	multiply<T>(A.get(), A_inv.get(), I_lu.get(), N, N, N);
 	
@@ -111,7 +113,9 @@ qr_inverse(void* instructions)
 	// Compare accuracy: compute A * A_inv - I for both methods
 	auto I = aligned_alloc_2D<T, S::bytes>(N, N);
 	auto I_qr = aligned_alloc_2D<T, S::bytes>(M, N);
-	set_identity(I.get(), N, N);
+
+	identity<T, S>(I.get(), N, N);
+	zeros<T, S>(I_qr.get(), M, N);
 	
 	multiply<T>(A.get(), A_inv.get(), I_qr.get(), M, N, N);
 	
