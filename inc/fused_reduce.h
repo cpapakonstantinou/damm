@@ -139,11 +139,11 @@ namespace damm
 		{
 			T local_result = seed_left_fold<T, R>();
 			
-			#pragma omp for schedule(static) nowait
 			for (size_t i = 0; i < M; i += l2_block)
 			{
 				T r = seed;
 				
+				#pragma omp for schedule(static) nowait
 				for (size_t j = 0; j < N; j += l3_block)
 				{
 					size_t m = std::min(l2_block, M - i);
@@ -353,28 +353,28 @@ namespace damm
 		{
 			T local_result = seed_left_fold<T, R>();
 			
-			#pragma omp for schedule(static) nowait
-				for (size_t i_block = 0; i_block < simd_rows; i_block += l2_block)
+			for (size_t i_block = 0; i_block < simd_rows; i_block += l2_block)
+			{
+				size_t i_end = std::min(i_block + l2_block, simd_rows);
+				
+				// L3 blocking over columns
+				for (size_t j_block = 0; j_block < simd_cols; j_block += l3_block)
 				{
-					size_t i_end = std::min(i_block + l2_block, simd_rows);
+					size_t j_end = std::min(j_block + l3_block, simd_cols);
 					
-					// L3 blocking over columns
-					for (size_t j_block = 0; j_block < simd_cols; j_block += l3_block)
+					// Micro-kernel tiles within cache blocks
+					#pragma omp for schedule(static) nowait
+					for (size_t i = i_block; i < i_end; i += tile_rows)
 					{
-						size_t j_end = std::min(j_block + l3_block, simd_cols);
-						
-						// Micro-kernel tiles within cache blocks
-						for (size_t i = i_block; i < i_end; i += tile_rows)
+						for (size_t j = j_block; j < j_end; j += tile_cols)
 						{
-							for (size_t j = j_block; j < j_end; j += tile_cols)
-							{
-								T partial = seed_left_fold<T, R>();
-								_fused_reduce_simd_block<T, U, R, S, K>(A, B, partial, i, j);
-								local_result = R{}(local_result, partial);
-							}
+							T partial = seed_left_fold<T, R>();
+							_fused_reduce_simd_block<T, U, R, S, K>(A, B, partial, i, j);
+							local_result = R{}(local_result, partial);
 						}
 					}
 				}
+			}
 			
 			#pragma omp critical
 			{

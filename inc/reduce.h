@@ -116,30 +116,26 @@ namespace damm
 		
 		T result = seed;
 		
-		if constexpr (std::same_as<O, std::plus<>>)
+		#pragma omp parallel
 		{
-			#pragma omp parallel for schedule(static, l2_block) reduction(+:result)
+			T local_result = seed_left_fold<T, O>();
+			
 			for (size_t i = 0; i < M; i += l2_block)
 			{
+				#pragma omp for schedule(static) nowait
 				for (size_t j = 0; j < N; j += l3_block)
 				{
+					T r = seed_left_fold<T, O>();
 					size_t m = std::min(l2_block, M - i);
 					size_t n = std::min(l3_block, N - j);
-					_reduce_block<T, O>(A, result, i, j, m, n);
+					_reduce_block<T, O>(A, r, i, j, m, n);
+					local_result = O{}(local_result, r);
 				}
 			}
-		}
-		else if constexpr (std::same_as<O, std::multiplies<>>)
-		{
-			#pragma omp parallel for schedule(static, l2_block) reduction(*:result)
-			for (size_t i = 0; i < M; i += l2_block)
+			
+			#pragma omp critical
 			{
-				for (size_t j = 0; j < N; j += l3_block)
-				{
-					size_t m = std::min(l2_block, M - i);
-					size_t n = std::min(l3_block, N - j);
-					_reduce_block<T, O>(A, result, i, j, m, n);
-				}
+				result = O{}(result, local_result);
 			}
 		}
 
@@ -274,9 +270,10 @@ namespace damm
 
 		T result = seed;
 
-		if constexpr (std::same_as<O, std::plus<>>)
+		#pragma omp parallel
 		{
-			#pragma omp parallel for schedule(static, l2_block) reduction(+:result)
+			T local_result = seed_left_fold<T, O>();
+			
 			for (size_t i_block = 0; i_block < simd_rows; i_block += l2_block)
 			{
 				size_t i_end = std::min(i_block + l2_block, simd_rows);
@@ -287,37 +284,22 @@ namespace damm
 					size_t j_end = std::min(j_block + l3_block, simd_cols);
 					
 					// Micro-kernel tiles within cache blocks
+					#pragma omp for schedule(static) nowait
 					for (size_t i = i_block; i < i_end; i += tile_rows)
 					{
 						for (size_t j = j_block; j < j_end; j += tile_cols)
 						{
-							_reduce_simd_block<T, O, S, K>(A, result, i, j);
+							T partial = seed_left_fold<T, O>();
+							_reduce_simd_block<T, O, S, K>(A, partial, i, j);
+							local_result = O{}(local_result, partial);
 						}
 					}
 				}
 			}
-		}
-		else if constexpr (std::same_as<O, std::multiplies<>>)
-		{
-			#pragma omp parallel for schedule(static, l2_block) reduction(*:result)
-			for (size_t i_block = 0; i_block < simd_rows; i_block += l2_block)
+			
+			#pragma omp critical
 			{
-				size_t i_end = std::min(i_block + l2_block, simd_rows);
-				
-				// L3 blocking over columns
-				for (size_t j_block = 0; j_block < simd_cols; j_block += l3_block)
-				{
-					size_t j_end = std::min(j_block + l3_block, simd_cols);
-					
-					// Micro-kernel tiles within cache blocks
-					for (size_t i = i_block; i < i_end; i += tile_rows)
-					{
-						for (size_t j = j_block; j < j_end; j += tile_cols)
-						{
-							_reduce_simd_block<T, O, S, K>(A, result, i, j);
-						}
-					}
-				}
+				result = O{}(result, local_result);
 			}
 		}
 

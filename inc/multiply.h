@@ -92,7 +92,7 @@ namespace damm
 		constexpr size_t l2_block = blocking::l2_block;
 		constexpr size_t l3_block = blocking::l3_block;
 		
-		#pragma omp parallel for schedule(static, l2_block)
+		#pragma omp parallel for schedule(static)
 		for (size_t i = 0; i < M; i += l2_block)
 		{
 			for (size_t j = 0; j < P; j += l3_block) 
@@ -274,7 +274,6 @@ namespace damm
 		#pragma omp parallel
 		{			
 
-			#pragma omp for schedule(static, l3_block) nowait
 			for (size_t j_block = 0; j_block < simd_P; j_block += l3_block)
 			{
 				size_t j_end = std::min(j_block + l3_block, simd_P);
@@ -290,7 +289,7 @@ namespace damm
 						const size_t panel_M = i_end - i_block;
 						const size_t panel_N = k_end - k_block;
 
-						
+						#pragma omp for schedule(static)
 						for (size_t i = 0; i < panel_M; i += kernel_rows)
 						{
 							for (size_t j = 0; j < (j_end - j_block); j += kernel_cols)

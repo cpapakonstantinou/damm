@@ -173,14 +173,17 @@ namespace damm
 			constexpr size_t l2_block = blocking::l2_block;
 			constexpr size_t l3_block = blocking::l3_block;
 			
-			#pragma omp parallel for schedule(static)
-			for (size_t i = 0; i < M; i += l2_block)
+			#pragma omp parallel
 			{
-				for (size_t j = 0; j < N; j += l3_block)
-				{ 
-					size_t m = std::min(l2_block, M - i);
-					size_t n = std::min(l3_block, N - j);
-					_fused_union_block<P, T, O1, O2>(A, B, C, D, i, j, m, n);
+				for (size_t i = 0; i < M; i += l2_block)
+				{
+					#pragma omp for schedule(static)
+					for (size_t j = 0; j < N; j += l3_block)
+					{ 
+						size_t m = std::min(l2_block, M - i);
+						size_t n = std::min(l3_block, N - j);
+						_fused_union_block<P, T, O1, O2>(A, B, C, D, i, j, m, n);
+					}
 				}
 			}
 		}
@@ -232,14 +235,17 @@ namespace damm
 			constexpr size_t l2_block = blocking::l2_block;
 			constexpr size_t l3_block = blocking::l3_block;
 			
-			#pragma omp parallel for schedule(static)
-			for (size_t i = 0; i < M; i += l2_block)
+			#pragma omp parallel
 			{
-				for (size_t j = 0; j < N; j += l3_block)
-				{ 
-					size_t m = std::min(l2_block, M - i);
-					size_t n = std::min(l3_block, N - j);
-					_fused_union_block<P, T, O1, O2>(A, B, C, D, i, j, m, n);
+				for (size_t i = 0; i < M; i += l2_block)
+				{
+					#pragma omp for schedule(static)
+					for (size_t j = 0; j < N; j += l3_block)
+					{ 
+						size_t m = std::min(l2_block, M - i);
+						size_t n = std::min(l3_block, N - j);
+						_fused_union_block<P, T, O1, O2>(A, B, C, D, i, j, m, n);
+					}
 				}
 			}
 		}
@@ -486,22 +492,25 @@ namespace damm
 			const size_t simd_rows = M - (M % tile_rows);
 			const size_t simd_cols = N - (N % tile_cols);
 
-			#pragma omp parallel for schedule(static)
-			for (size_t i_block = 0; i_block < simd_rows; i_block += l2_block)
+			#pragma omp parallel
 			{
-				size_t i_end = std::min(i_block + l2_block, simd_rows);
-				
-				// L3 blocking over columns
-				for (size_t j_block = 0; j_block < simd_cols; j_block += l3_block)
+				for (size_t i_block = 0; i_block < simd_rows; i_block += l2_block)
 				{
-					size_t j_end = std::min(j_block + l3_block, simd_cols);
+					size_t i_end = std::min(i_block + l2_block, simd_rows);
 					
-					// Micro-kernel tiles within cache blocks
-					for (size_t i = i_block; i < i_end; i += tile_rows)
+					// L3 blocking over columns
+					for (size_t j_block = 0; j_block < simd_cols; j_block += l3_block)
 					{
-						for (size_t j = j_block; j < j_end; j += tile_cols)
+						size_t j_end = std::min(j_block + l3_block, simd_cols);
+						
+						// Micro-kernel tiles within cache blocks
+						#pragma omp for schedule(static)
+						for (size_t i = i_block; i < i_end; i += tile_rows)
 						{
-							_fused_union_simd_block<P, T, O1, O2, S, K>(A, B, C, D, i, j);
+							for (size_t j = j_block; j < j_end; j += tile_cols)
+							{
+								_fused_union_simd_block<P, T, O1, O2, S, K>(A, B, C, D, i, j);
+							}
 						}
 					}
 				}
@@ -796,22 +805,25 @@ namespace damm
 			const size_t simd_rows = M - (M % tile_rows);
 			const size_t simd_cols = N - (N % tile_cols);
 
-			#pragma omp parallel for schedule(static)
-			for (size_t i_block = 0; i_block < simd_rows; i_block += l2_block)
+			#pragma omp parallel
 			{
-				size_t i_end = std::min(i_block + l2_block, simd_rows);
-				
-				// L3 blocking over columns
-				for (size_t j_block = 0; j_block < simd_cols; j_block += l3_block)
+				for (size_t i_block = 0; i_block < simd_rows; i_block += l2_block)
 				{
-					size_t j_end = std::min(j_block + l3_block, simd_cols);
+					size_t i_end = std::min(i_block + l2_block, simd_rows);
 					
-					// Micro-kernel tiles within cache blocks
-					for (size_t i = i_block; i < i_end; i += tile_rows)
+					// L3 blocking over columns
+					for (size_t j_block = 0; j_block < simd_cols; j_block += l3_block)
 					{
-						for (size_t j = j_block; j < j_end; j += tile_cols)
+						size_t j_end = std::min(j_block + l3_block, simd_cols);
+						
+						// Micro-kernel tiles within cache blocks
+						#pragma omp for schedule(static)
+						for (size_t i = i_block; i < i_end; i += tile_rows)
 						{
-							_fused_union_simd_block<P, T, O1, O2, S, K>(A, B, C, D, i, j);
+							for (size_t j = j_block; j < j_end; j += tile_cols)
+							{
+								_fused_union_simd_block<P, T, O1, O2, S, K>(A, B, C, D, i, j);
+							}
 						}
 					}
 				}
@@ -1049,14 +1061,17 @@ namespace damm
 			constexpr size_t l2_block = blocking::l2_block;
 			constexpr size_t l3_block = blocking::l3_block;
 			
-			#pragma omp parallel for schedule(static)
-			for (size_t i = 0; i < M; i += l2_block)
+			#pragma omp parallel
 			{
-				for (size_t j = 0; j < N; j += l3_block)
-				{ 
-					size_t m = std::min(l2_block, M - i);
-					size_t n = std::min(l3_block, N - j);
-					_fused_union_block<P, T, O1, O2>(A, B, C, D, i, j, m, n);
+				for (size_t i = 0; i < M; i += l2_block)
+				{
+					#pragma omp for schedule(static)
+					for (size_t j = 0; j < N; j += l3_block)
+					{ 
+						size_t m = std::min(l2_block, M - i);
+						size_t n = std::min(l3_block, N - j);
+						_fused_union_block<P, T, O1, O2>(A, B, C, D, i, j, m, n);
+					}
 				}
 			}
 		}
@@ -1304,22 +1319,25 @@ namespace damm
 			const size_t simd_rows = M - (M % tile_rows);
 			const size_t simd_cols = N - (N % tile_cols);
 
-			#pragma omp parallel for schedule(static)
-			for (size_t i_block = 0; i_block < simd_rows; i_block += l2_block)
+			#pragma omp parallel
 			{
-				size_t i_end = std::min(i_block + l2_block, simd_rows);
-				
-				// L3 blocking over columns
-				for (size_t j_block = 0; j_block < simd_cols; j_block += l3_block)
+				for (size_t i_block = 0; i_block < simd_rows; i_block += l2_block)
 				{
-					size_t j_end = std::min(j_block + l3_block, simd_cols);
+					size_t i_end = std::min(i_block + l2_block, simd_rows);
 					
-					// Micro-kernel tiles within cache blocks
-					for (size_t i = i_block; i < i_end; i += tile_rows)
+					// L3 blocking over columns
+					for (size_t j_block = 0; j_block < simd_cols; j_block += l3_block)
 					{
-						for (size_t j = j_block; j < j_end; j += tile_cols)
+						size_t j_end = std::min(j_block + l3_block, simd_cols);
+						
+						// Micro-kernel tiles within cache blocks
+						#pragma omp for schedule(static)
+						for (size_t i = i_block; i < i_end; i += tile_rows)
 						{
-							_fused_union_simd_block<P, T, O1, O2, S, K>(A, B, C, D, i, j);
+							for (size_t j = j_block; j < j_end; j += tile_cols)
+							{
+								_fused_union_simd_block<P, T, O1, O2, S, K>(A, B, C, D, i, j);
+							}
 						}
 					}
 				}
