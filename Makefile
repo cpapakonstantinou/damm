@@ -27,11 +27,14 @@ OPT = -O3
 DEBUG_SYM = -g
 CARRAY_DIR = /usr/include/carray
 ORACLE_DIR = /usr/include/oracle
-LDFLAGS = 
+LDFLAGS = $(OMPFLAGS)
 SIMDFLAGS = -msse4.1 -mavx512f -mavx512cd -mavx512bw -mavx512dq -mfma
-CXXFLAGS = $(CXX_STD) $(DEBUG_SYM) -fPIC $(OPT) -march=native -I$(INCDIR) -I $(CARRAY_DIR) -I$(ORACLE_DIR) $(SIMDFLAGS) -funroll-loops
+OMPFLAGS = -fopenmp -lgomp
+CXXFLAGS = $(CXX_STD) $(DEBUG_SYM) -fPIC $(OPT) -march=native -funroll-loops \
+	-I$(INCDIR) -I $(CARRAY_DIR) -I$(ORACLE_DIR) \
+	$(SIMDFLAGS) $(OMPFLAGS) 
 LDLIBS =
-TEST_LDFLAGS = -L ./ -Wl,-rpath=.
+TEST_LDFLAGS = -L ./ -Wl,-rpath=. -fopenmp
 TEST_LDLIBS = -ldamm
 TEST_TARGETS = simd_test \
 				broadcast_test \
@@ -76,6 +79,11 @@ $(PERF_TARGETS): %: $(TESTDIR)/%.o $(TARGET)
 unit_test:$(TEST_TARGETS)
 	for test in $(TEST_TARGETS); do \
 		./$$test;  \
+	done;
+
+perf_test:$(PERF_TARGETS)
+	for test in $(PERF_TARGETS); do \
+		taskset -c 0 $$test;  \
 	done;
 
 clean:

@@ -32,10 +32,14 @@
 #include <cmath>
 #include <common.h>
 #include <damm_memory.h>
-#include <broadcast.h>
-#include <union.h>
 #include <fused_union.h>
+#include <fused_reduce.h>
+#include <union.h>
+#include <reduce.h>
+#include <multiply.h>
+#include <transpose.h>
 #include <householder.h>
+#include <broadcast.h>
 
 namespace damm
 {
@@ -274,6 +278,102 @@ namespace qr
 	}
 	
 } // namespace qr
+
+namespace cholesky
+{
+	/**
+	 * \brief kernel for the row-segment dot product L[i][0..len) · L[j][0..len).
+	 *
+	 * Computes Σ_{p<len} A_row[p] * B_row[p] over two contiguous row segments.
+	 * Both segments are accessed sequentially in memory (row-major friendly),
+	 * which is the key cache-locality property exploited by the Cholesky-Banachiewicz
+	 * algorithm. For short segments (len smaller than a SIMD lane) the call falls
+	 * through fused_reduce's scalar tail; for longer segments it engages the
+	 * SIMD-blocked kernels with FMA accumulation.
+	 *
+	 * Low level function not intended for the public API.
+	 */
+	template <typename T, typename S>
+	inline __attribute__((always_inline))
+	T
+	_row_dot(T* A_row, T* B_row, const size_t len)
+	{
+		if (len == 0) return T(0);
+		
+		// Build 1×len views over the contiguous row segments. No data copies;
+		// view_as_2D just allocates a one-element pointer array per side.
+		auto A_view = view_as_2D(A_row, 1, len);
+		auto B_view = view_as_2D(B_row, 1, len);
+		
+		return fused_reduce<T, std::multiplies<>, std::plus<>, S>(
+			A_view.get(), B_view.get(), T(0), 1, len);
+	}
+
+	/**
+	 * \brief Cholesky Decomposition (LL^T) using SIMD-optimized operations.
+	 *
+	 * Performs in-place Cholesky decomposition of a symmetric positive-definite
+	 * matrix A such that A = L * L^T, where L is lower triangular. Only the
+	 * lower triangular part of A is read; the strict upper triangular part is
+	 * overwritten with zeros on output.
+	 *
+	 * Uses the row-oriented Cholesky-Banachiewicz algorithm. For each row i,
+	 *   L[i][j]  = ( A[i][j] - Σ_{p<j} L[i][p] * L[j][p] ) / L[j][j],   j < i
+	 *   L[i][i]  = sqrt( A[i][i] - Σ_{p<i} L[i][p]^2 )
+	 * Both terms inside the sums walk row i and row j (or row i twice) in the
+	 * forward direction. Since damm stores matrices row-major, every memory
+	 * read in the hot loop is sequential — engaging the SIMD-FMA kernels of
+	 * fused_reduce on data that arrives in cache lines naturally, and avoiding
+	 * the strided gathers a column-oriented algorithm would force on row-major
+	 * storage.
+	 *
+	 * \tparam T        Scalar type (float or double)
+	 * \tparam S        SIMD instruction set (SSE, AVX, AVX512)
+	 *
+	 * \param A         Input matrix A (N×N), overwritten with L (lower triangle).
+	 *                  The strict upper triangle is set to zero on success.
+	 * \param N         Matrix dimension
+	 *
+	 * \return true if decomposition successful, false if matrix is not positive definite
+	 */
+	template<typename T, typename S = decltype(detect_simd())>
+	inline bool
+	decompose(T** A, const size_t N)
+	{
+		right<T>("decompose:", std::make_tuple(A, N, N));
+		
+		for (size_t i = 0; i < N; ++i)
+		{
+			// Off-diagonal entries of row i: L[i][j] for j < i.
+			// Each is the inner product of two completed row segments of L,
+			// subtracted from A[i][j] and scaled by the already-known L[j][j].
+			for (size_t j = 0; j < i; ++j)
+			{
+				const T dot = _row_dot<T, S>(A[i], A[j], j);
+				A[i][j] = (A[i][j] - dot) / A[j][j];
+			}
+			
+			// Diagonal entry: L[i][i] = sqrt(A[i][i] - ||L[i][0..i)||^2).
+			// The squared-norm is the row segment dotted with itself —
+			// same contiguous-row access pattern as the off-diagonal step.
+			const T diag_sum = _row_dot<T, S>(A[i], A[i], i);
+			const T x = A[i][i] - diag_sum;
+			
+			if (x <= T(0))
+				return false; // Matrix is not positive definite
+			
+			A[i][i] = std::sqrt(x);
+		}
+		
+		// Zero the strict upper triangle so A becomes a clean L.
+		for (size_t i = 0; i < N; ++i)
+			for (size_t j = i + 1; j < N; ++j)
+				A[i][j] = T(0);
+		
+		return true;
+	}
+
+} // namespace cholesky
 } //namespace damm
 
 #endif //__DECOMPOSE_H__

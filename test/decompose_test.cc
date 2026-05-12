@@ -183,6 +183,80 @@ qr_decomposition(void* instructions)
 }
 
 
+template<typename T, typename S>
+std::expected<E, U>
+cholesky_decomposition(void* instructions)
+{
+	constexpr size_t N = 4;
+	constexpr T tolerance = std::is_same_v<T, float> ? 1e-6f : 1e-12;
+	
+	auto A = carray<T, 2, S::bytes>(N, N);
+	auto L = carray<T, 2, S::bytes>(N, N);
+	auto Lt = carray<T, 2, S::bytes>(N, N);
+	auto LLt = carray<T, 2, S::bytes>(N, N);
+	
+	// Symmetric positive-definite test matrix (diagonally dominant SPD)
+	T A_data[N][N] = {
+		{ 4,  1,  2,  1},
+		{ 1,  5,  1,  3},
+		{ 2,  1,  6,  2},
+		{ 1,  3,  2,  7}
+	};
+	
+	// Copy data; L will hold the in-place decomposition
+	for (size_t i = 0; i < N; ++i)
+		for (size_t j = 0; j < N; ++j)
+		{
+			A[i][j] = A_data[i][j];
+			L[i][j] = A_data[i][j];
+		}
+	
+	bool success = cholesky::decompose<T, S>(L.get(), N);
+	
+	if (!success)
+	{
+		print_matrix(A.get(), N, N, "Original Matrix A");
+		print_matrix(L.get(), N, N, "L (failed)");
+		return std::unexpected{"matrix is not positive definite"};
+	}
+	
+	// Verify strict upper triangle of L is zero
+	for (size_t i = 0; i < N; ++i)
+		for (size_t j = i + 1; j < N; ++j)
+		{
+			if (std::abs(L[i][j]) > tolerance)
+			{
+				print_matrix(L.get(), N, N, "L matrix");
+				std::string response = std::format("L is not lower triangular: |L[{},{}]| = {}",
+					i, j, std::abs(L[i][j]));
+				return std::unexpected{response};
+			}
+		}
+	
+	// Reconstruct A = L * L^T. Zero Lt and LLt before they are written into,
+	// since transpose and multiply both accumulate into their outputs.
+	zeros<T, S>(Lt.get(), N, N);
+	transpose<T, S>(L.get(), Lt.get(), N, N);
+	
+	zeros<T, S>(LLt.get(), N, N);
+	multiply<T, S>(L.get(), Lt.get(), LLt.get(), N, N, N);
+	
+	T reconstruction_error = matrix_max_error(A.get(), LLt.get(), N, N);
+	
+	if (reconstruction_error > tolerance)
+	{
+		print_matrix(A.get(), N, N, "Original Matrix A");
+		print_matrix(L.get(), N, N, "L matrix");
+		print_matrix(LLt.get(), N, N, "L*L^T Reconstruction");
+		std::string response = std::format("Reconstruction error ||A - L*L^T||_max = {}",
+			reconstruction_error);
+		return std::unexpected{response};
+	}
+	
+	return 0;
+}
+
+
 int main(int argc, char* argv[]) 
 {
 
@@ -191,6 +265,7 @@ int main(int argc, char* argv[])
 	oracle::Heracles<E, U> heracles{};
 	heracles.add_labor(0, "lu::decompose", &lu_decomposition<T, AVX512>, nullptr);
 	heracles.add_labor(1, "qr::decompose", &qr_decomposition<T, AVX512>, nullptr);
+	heracles.add_labor(2, "cholesky::decompose", &cholesky_decomposition<T, AVX512>, nullptr);
 
 	try 
 	{
