@@ -328,9 +328,6 @@ namespace damm
 		 * \param N		Number of columns in A, B, and C
 		 *
 		 * \note	Matrices must have the same shape: M × N.
-		 * \note	Blocked traversal ensures improved cache locality.
-		 * \note	Requires that O is one of the standard arithmetic function objects.
-		 * \note	This function operates on a 2D array-of-pointers representation.
 		 */
 		template <typename T, typename O, template<typename, typename> class K>	
 		requires (
@@ -436,7 +433,7 @@ namespace damm
 		 * \param N Number of columns
 		 *
 		 * \note Matrices must have the same dimensions (M×N).
-		 * \note Asymmetric matrices (M ≠ N) are supported.
+		 * \note Asymmetric matrices (M != N) are supported.
 		 * \note Strides not aligned with SIMD block sizes are safely handled.
 		 */
 		template<typename T, typename O, typename S, template<typename, typename> class K>

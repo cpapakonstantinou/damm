@@ -37,18 +37,13 @@
  *
  * \note
  * A reduction combines elements over an index domain using a specified 
- * binary arithmetic operator (e.g., addition, subtraction, multiplication, 
- * or division) to produce a single aggregated result.
+ * binary arithmetic operator  to produce a single aggregated result.
  *
  * \note
  * Reduction operations typically assume associative operators for safe 
  * and efficient vectorization and parallelization, but may be adapted 
  * to other operators depending on numerical requirements.
  *
- * \note
- * This operation is fundamental in parallel computing and SIMD 
- * optimizations, where partial results are combined efficiently 
- * using hardware-supported instructions.
  */
 namespace damm
 {
@@ -152,6 +147,7 @@ namespace damm
 	 * \tparam T   Scalar type (float, double, or complex variants)
 	 * \tparam S   SIMD instruction set (SSE, AVX, AVX512)
 	 * \tparam O  Operation type (std::plus<> or std::multiplies<>)
+	 * \tparam K	Kernel policy defining cache blocking sizes
 	 * 
 	 * \param A      Input matrix
 	 * \param row    Starting row offset
@@ -244,7 +240,6 @@ namespace damm
 	 * 
 	 * \note Subtract and Divide are not implemented due to lack of associativity/commutativity.
 	 * \note Matrix dimensions may be asymmetric (M ≠ N).
-	 * \note Block-aligned memory is not required.
 	 */
 	template<typename T, typename O, typename S, template<typename, typename> class K>	
 	requires 
@@ -346,10 +341,10 @@ namespace damm
 	 * | Subtract  | No          | No          | No       |
 	 * | Divide    | No          | No          | No       |
 	 * 
-	 * \tparam T       		Element type (float or double)
-	 * \tparam O       		Binary reduction operator (e.g. std::plus<> or std::multiplies<>)
-	 * \tparam S       		SIMD instruction set to use (SSE, AVX, or AVX512)
-	 * \tparam K			Kernel policy defining cache blocking sizes
+	 * \tparam T	Element type (float or double)
+	 * \tparam O	Binary reduction operator (e.g. std::plus<> or std::multiplies<>)
+	 * \tparam S	SIMD instruction set to use (SSE, AVX, or AVX512)
+	 * \tparam K	Kernel policy defining cache blocking sizes
 	 * 
 	 * \param A     Matrix of size M×N (2D pointer to row-major blocks)
 	 * \param seed  Initial value for reduction
@@ -359,8 +354,7 @@ namespace damm
 	 * \return The reduced scalar result of applying the binary operator across the matrix
 	 * 
 	 * \note Subtract and Divide are not implemented due to lack of associativity/commutativity.
-	 * \note Matrix dimensions may be asymmetric (M ≠ N).
-	 * \note Block-aligned memory is not required.
+	 * \note Matrix dimensions may be asymmetric (M != N).
 	 */
 
 	template<typename T, typename O, typename S = decltype(detect_simd()),

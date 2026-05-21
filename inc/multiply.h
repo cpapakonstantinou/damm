@@ -64,7 +64,7 @@ namespace damm
 	 * \brief	Matrix multiplication.
 	 *
 	 * Performs blocked matrix multiplication of A × B = C using tiling, with inputs
-	 * represented as T** (row major). Enables optional use of transposed B for performance.
+	 * represented as T** row major. Enables optional use of transposed B for performance.
 	 *
 	 * \tparam T	Scalar type (e.g., float or double)
 	 * \tparam TR	If true, matrix B is assumed to be transposed
@@ -154,9 +154,9 @@ namespace damm
 		store<T, S, K>(C, c_ptrs, row, col);
 	}
 
-	// /**
-	//  * \brief SIMD multiply kernel for complex types
-	//  */
+	/**
+	 * \brief SIMD multiply kernel for complex types
+	 */
 	template<typename T, typename S, template<typename, typename> class K>
 	requires (std::is_same_v<T, std::complex<float>> || std::is_same_v<T, std::complex<double>>)
 	inline __attribute__((always_inline))

@@ -59,20 +59,17 @@ namespace damm
 	 *
 	 * Performs a blocked scalar broadcast operation, filling matrix A with scalar value B.
 	 * The matrix is processed in tiles of `block_size x block_size` to improve cache locality.
-	 * This function operates on matrix views that provide 2D access (e.g., row-major 
-	 * pointer-to-pointer layout), typically created from contiguous memory.
+	 * This function operates on matrix views in contiguous row-major format.
 	 *
 	 * \tparam T	Element type of the matrix (e.g., float, double).
+	 * \tparam K	Kernel policy defining cache blocking sizes
 	 *
 	 * \param A		Target matrix with dimensions M x N
 	 * \param B		Scalar value to broadcast to all elements of A
 	 * \param M		Number of rows in matrix A
 	 * \param N		Number of columns in matrix A
 	 *
-	 * \note Matrix A must be a valid 2D view over contiguous row-major memory.
-	 * \note The broadcast supports asymmetric matrices (M != N) and dimensions
-	 *       that are not multiples of the block size.
-	 * \note Uses block tiling to optimize cache performance and reduce TLB pressure.
+	 * \note The broadcast supports asymmetric matrices (M != N) and dimensions that are not multiples of the block size.
 	 */
 	template <typename T, template<typename, typename> class K>
 	inline __attribute__((always_inline))
@@ -109,6 +106,7 @@ namespace damm
 	 *
 	 * \tparam T	Scalar type (float, double, or complex variants)
 	 * \tparam S	SIMD instruction set to use (SSE, AVX, AVX512)
+	 * \tparam K	Kernel policy defining cache blocking sizes
 	 *
 	 * \param A		Pointer to memory block to fill
 	 * \param B		Scalar value to broadcast
@@ -157,6 +155,7 @@ namespace damm
 	 *
 	 * \tparam T	Scalar type (float, double, or complex variants)
 	 * \tparam S	SIMD instruction set to use (SSE, AVX, AVX512)
+	 * \tparam K	Kernel policy defining cache blocking sizes
 	 *
 	 * \param A		Pointer to a 2D matrix A
 	 * \param B		Scalar value to broadcast to all elements
@@ -238,17 +237,15 @@ namespace damm
 	 * The broadcast operation assigns scalar value B to all elements of matrix A, where 
 	 * A[i][j] = B for all valid indices.
 	 *
-	 * \tparam T			Element type of the matrix (e.g., float, double).
-	 * \tparam S			SIMD instruction set to use (SSE, AVX, AVX512, or NONE).
+	 * \tparam T	Element type of the matrix (e.g., float, double).
+	 * \tparam S	SIMD instruction set to use (SSE, AVX, AVX512, or NONE).
 	 *
 	 * \param A		Target matrix of dimensions MxN in row-major layout.
 	 * \param B		Scalar value to broadcast to all matrix elements.
 	 * \param M		Number of rows in matrix A.
 	 * \param N		Number of columns in matrix A.
 	 *
-	 * \note Matrix must be allocated as contiguous memory block accessible through the 2D pointer interface.
 	 * \note Non-square matrices and asymmetric dimensions (M != N) are fully supported.
-	 * 
 	 */
 	template<typename T, typename S = decltype(detect_simd()), 
 		template<typename, typename> class K = broadcast_kernel>
@@ -273,6 +270,7 @@ namespace damm
 	 *
 	 * \tparam T	Element type of the matrix (e.g., float, double).
 	 * \tparam S	SIMD instruction set to use (SSE, AVX, AVX512, or NONE).
+	 * \tparam K	Kernel policy defining cache blocking sizes
 	 *
 	 * \param A		Target matrix of dimensions MxN in row-major layout.
 	 * \param M		Number of rows in matrix A.
@@ -300,6 +298,7 @@ namespace damm
 	 *
 	 * \tparam T	Element type of the matrix (e.g., float, double).
 	 * \tparam S	SIMD instruction set to use (SSE, AVX, AVX512, or NONE).
+	 * \tparam K	Kernel policy defining cache blocking sizes
 	 *
 	 * \param A		Target matrix of dimensions MxN in row-major layout.
 	 * \param M		Number of rows in matrix A.
@@ -341,6 +340,7 @@ namespace damm
 	 *
 	 * \tparam T	Element type of the matrix (e.g., float, double).
 	 * \tparam S	SIMD instruction set to use (SSE, AVX, AVX512, or NONE).
+	 * \tparam K	Kernel policy defining cache blocking sizes
 	 *
 	 * \param A		Target matrix of dimensions MxN in row-major layout.
 	 * \param M		Number of rows in matrix A.

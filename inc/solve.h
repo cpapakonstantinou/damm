@@ -42,7 +42,7 @@ namespace damm
 	{
 		/**
 		 * \brief General forward substitution.
-		 *        Solves L * y = b, where L is lower triangular.
+		 *	Solves L * y = b, where L is lower triangular.
 		 *
 		 * \param L         Lower triangular matrix (NxN).
 		 * \param b         Right-hand side vector.
@@ -78,7 +78,7 @@ namespace damm
 
 		/**
 		 * \brief General backward substitution.
-		 *        Solves U * x = y, where U is upper triangular.
+		 *	Solves U * x = y, where U is upper triangular.
 		 *
 		 * \param U         Upper triangular matrix (NxN).
 		 * \param y         Right-hand side vector.
@@ -99,13 +99,13 @@ namespace damm
 				
 				if (len > 0)
 				{
-					// Need to compute dot product: U[i][i+1:N] · x[i+1:N]
-					// Wrap &U[i][i+1] and &x[i+1] as T** (1D views)
 					auto U_row = view_as_2D(&U[i][i + 1], 1, len);
 					auto x_vec = view_as_2D(&x[i + 1], 1, len);
 					
 					sum = fused_reduce<T, std::multiplies<>, std::plus<>, S>(
-						U_row.get(), x_vec.get(), T(0), 1, len);
+						U_row.get(), 
+						x_vec.get(), 
+						T(0), 1, len);
 				}
 				
 				x[i] = unit_diag ? (y[i] - sum)

@@ -43,12 +43,12 @@
  *
  * \note
  * The scalar namespace provides signature-controlled operation ordering, enabling flexible
- * BLAS patterns like A + Î±*B, (A+B)*Î±, and Î±/(A+B) through strategic operand positioning.
+ * BLAS patterns like A + C*B, (A+B)*C, and C/(A+B) through strategic operand positioning.
  * The matrix namespace supports full element-wise fusion of three matrices with configurable
  * operation precedence.
  *
  * \note
- * All operations support asymmetric matrices (M â‰  N) and provide SIMD acceleration.
+ * All operations support asymmetric matrices (M != N) and provide SIMD acceleration.
  * Vectorization (SSE/AVX/AVX512) registers are selected based on
  * compile-time detection or explicit template parameters.
  */
@@ -66,14 +66,14 @@ namespace damm
 	 * fused_union(C, A, B, D): FUSION_FIRST -> D = OP1((C OP2 A), B)  // (C * A) + B, (C / A) - B
 	 *
 	 * MATRIX NAMESPACE COVERAGE:
-	 * UNION_FIRST:  (A + B) âŠ™ D, (A - B) + D, (A âŠ™ B) / D
-	 * FUSION_FIRST: A + (B âŠ™ D), A - (B âŠ™ D), A âŠ™ (B / D)
+	 * UNION_FIRST:  (A + B) x C, (A - B) + C, (A x B) / C
+	 * FUSION_FIRST: A + (B x C), A - (B x C), A x (B / C)
 	 *
 	 * KEY BLAS PATTERNS:
-	 * AXPY family:     A + D*B, A - D*B (via signature control)
-	 * SCAL variants:   D*(A+B), D*(A-B), (A+B)*D, (A-B)*D  
-	 * Hadamard fusion: A + BâŠ™D, A âŠ™ (B+D)
-	 * Reciprocal ops:  A + D/B, A + B/D, D/(A+B), (A+B)/D
+	 * AXPY family:     A + C*B, A - C*B
+	 * SCAL variants:   C*(A+B), C*(A-B), (A+B)*C, (A-B)*C  
+	 * Hadamard fusion: A + B x C, A x (B+C)
+	 * Reciprocal ops:  A + C/B, A + B/C, C/(A+B), (A+B)/C
 	 */
 	enum class FusionPolicy 
 	{
@@ -146,10 +146,6 @@ namespace damm
 		 * \param M		Number of rows in matrices A, B, and D
 		 * \param N		Number of columns in matrices A, B, and D
 		 *
-		 * \note	Matrices must have the same shape: M × N.
-		 * \note	Blocked traversal ensures improved cache locality.
-		 * \note	Supports all combinations of standard arithmetic operators.
-		 * \note	Enables BLAS-style patterns like AXPY variants and scalar multiplication.
 		 */
 		template <FusionPolicy P, typename T, typename O1, typename O2, template<typename, typename> class K>	
 		requires 
@@ -209,9 +205,6 @@ namespace damm
 		 * \param M		Number of rows in matrices A, C, and D
 		 * \param N		Number of columns in matrices A, C, and D
 		 *
-		 * \note	Alternative signature enables different BLAS patterns via operand positioning.
-		 * \note	Particularly useful for patterns like A + α*C or A*α + C.
-		 * \note	Cache-blocked implementation optimizes memory access patterns.
 		 */
 		template <FusionPolicy P, typename T, typename O1, typename O2, template<typename, typename> class K>	
 		requires 
@@ -444,15 +437,14 @@ namespace damm
 		 * \brief Element-wise fused union using SIMD intrinsics for 2D pointer matrices with scalar.
 		 *
 		 * Performs SIMD-accelerated fused operations on 2D matrix A, B with scalar C, storing
-		 * the result in matrix D. Internally flattens matrices to invoke SIMD routines while
-		 * maintaining the 2D pointer interface for compatibility.
-		 *
-		 * \tparam P		Fusion policy controlling operation order
-		 * \tparam T		Scalar type (float or double)
-		 * \tparam O1		First binary operator: must be one of std::plus<>, std::minus<>, std::multiplies<>, or std::divides<>
-		 * \tparam O2		Second binary operator: must be one of std::plus<>, std::minus<>, std::multiplies<>, or std::divides<>
-		 * \tparam S		SIMD instruction set (SSE, AVX, AVX512)
-		 * \tparam threads	Number of threads used in parallel execution
+		 * the result in matrix D. 
+		 * 
+		 * \tparam P	Fusion policy controlling operation order
+		 * \tparam T	Scalar type
+		 * \tparam O1	First binary operator: must be one of std::plus<>, std::minus<>, std::multiplies<>, or std::divides<>
+		 * \tparam O2	Second binary operator: must be one of std::plus<>, std::minus<>, std::multiplies<>, or std::divides<>
+		 * \tparam S	SIMD instruction set (SSE, AVX, AVX512)
+		 * \tparam K	Kernel policy defining cache blocking sizes
 		 *
 		 * \param A		Matrix A as array of M row pointers, each of size N
 		 * \param B		Matrix B as array of M row pointers, each of size N
@@ -461,9 +453,6 @@ namespace damm
 		 * \param M		Number of rows
 		 * \param N		Number of columns
 		 *
-		 * \note Matrices are validated for contiguity and proper alignment.
-		 * \note 2D pointer interface maintained while leveraging SIMD optimizations.
-		 * \note Signature: (A, B, scalar, D) pattern for specific BLAS operations.
 		 */
 		template<FusionPolicy P, typename T, typename O1, typename O2, typename S, template<typename, typename> class K>
 		requires 
@@ -552,7 +541,7 @@ namespace damm
 			}
 		}
 
-		/**
+	/**
 	 * \brief SIMD block kernel for scalar fused union (A, scalar, C, D) with FMA optimization
 	 */
 	template<FusionPolicy P, typename T, typename O1, typename O2, typename S, 
@@ -756,15 +745,14 @@ namespace damm
 		 * \brief Element-wise fused union using SIMD intrinsics for 2D pointer matrices with alternative scalar positioning.
 		 *
 		 * Performs SIMD-accelerated fused operations on 2D matrices A, C with scalar B positioned
-		 * between them. Maintains 2D pointer interface while enabling signature-controlled BLAS
-		 * patterns through strategic operand positioning.
-		 *
-		 * \tparam P		Fusion policy controlling operation order
-		 * \tparam T		Scalar type (float or double)
-		 * \tparam O1		First binary operator: must be one of std::plus<>, std::minus<>, std::multiplies<>, or std::divides<>
-		 * \tparam O2		Second binary operator: must be one of std::plus<>, std::minus<>, std::multiplies<>, or std::divides<>
-		 * \tparam S		SIMD instruction set (SSE, AVX, AVX512)
-		 * \tparam threads	Number of threads used in parallel execution
+		 * between them.
+		 * 
+		 * \tparam P	Fusion policy controlling operation order
+		 * \tparam T	Scalar type
+		 * \tparam O1	First binary operator: must be one of std::plus<>, std::minus<>, std::multiplies<>, or std::divides<>
+		 * \tparam O2	Second binary operator: must be one of std::plus<>, std::minus<>, std::multiplies<>, or std::divides<>
+		 * \tparam S	SIMD instruction set (SSE, AVX, AVX512)
+		 * \tparam K	Kernel policy defining cache blocking sizes
 		 *
 		 * \param A		Matrix A as array of M row pointers, each of size N
 		 * \param B		Scalar operand B
@@ -773,9 +761,6 @@ namespace damm
 		 * \param M		Number of rows
 		 * \param N		Number of columns
 		 *
-		 * \note Alternative signature enables different BLAS patterns via operand positioning.
-		 * \note 2D interface with SIMD acceleration for optimal performance and usability.
-		 * \note Signature: (A, scalar, C, D) pattern for flexible operation control.
 		 */
 		template<FusionPolicy P, typename T, typename O1, typename O2, typename S, template <typename, typename> class K>
 		requires 
@@ -888,11 +873,6 @@ namespace damm
 		 * \param M		Number of rows in matrices A, B, and D
 		 * \param N		Number of columns in matrices A, B, and D
 		 *
-		 * \note Matrices must be allocated as contiguous memory blocks accessible
-		 *       through the 2D pointer interface. Submatrix views are not supported.
-		 * \note When S=NONE, the function uses standard blocked operations without SIMD.
-		 * \note SIMD implementations automatically handle non-aligned dimensions with scalar fallback.
-		 * \note Signature enables specific BLAS patterns: (A op1 B) op2 C or A op1 (B op2 C).
 		 *
 		 * \throws std::invalid_argument if any matrix pointer is null.
 		 * \throws std::runtime_error if memory layout validation fails.
@@ -935,7 +915,7 @@ namespace damm
 		 *
 		 * The fused operation computes either OP2(B, OP1(A[i][j], C[i][j])) for UNION_FIRST
 		 * or OP1(A[i][j], OP2(B, C[i][j])) for FUSION_FIRST, unlocking alternative BLAS-style
-		 * patterns like A + α*C or A*α + C through strategic operand positioning.
+		 * patterns like A + B*C or A*B + C through strategic operand positioning.
 		 *
 		 * \tparam P	Fusion policy controlling operation precedence
 		 * \tparam T	Element type of the matrices (e.g., float, double)
@@ -950,11 +930,6 @@ namespace damm
 		 * \param D		Result matrix D as array of M row pointers, each of size N
 		 * \param M		Number of rows in matrices A, C, and D
 		 * \param N		Number of columns in matrices A, C, and D
-		 *
-		 * \note Alternative signature enables different BLAS patterns via strategic operand positioning.
-		 * \note Matrices must be allocated as contiguous memory blocks accessible through 2D interface.
-		 * \note Particularly effective for patterns requiring scalar multiplication or division with matrices.
-		 * \note SIMD optimizations apply automatically based on template parameter selection.
 		 *
 		 * \throws std::invalid_argument if any matrix pointer is null.
 		 * \throws std::runtime_error if memory layout validation fails.
@@ -1035,9 +1010,6 @@ namespace damm
 		 * \param N		Number of columns in matrices A, B, C, and D
 		 *
 		 * \note	All matrices must have the same shape: M × N.
-		 * \note	Blocked traversal ensures improved cache locality for large matrices.
-		 * \note	Enables efficient ternary operations with configurable precedence.
-		 * \note	Supports comprehensive BLAS-style element-wise operations.
 		 */
 		template <FusionPolicy P, typename T, typename O1, typename O2, template<typename, typename> class K>	
 		requires 
@@ -1274,11 +1246,11 @@ namespace damm
 		 * maintaining the 2D pointer interface.
 		 *
 		 * \tparam P		Fusion policy controlling operation order
-		 * \tparam T		Scalar type (float or double)
+		 * \tparam T		Scalar type
 		 * \tparam O1		First binary operator: must be one of std::plus<>, std::minus<>, std::multiplies<>, or std::divides<>
 		 * \tparam O2		Second binary operator: must be one of std::plus<>, std::minus<>, std::multiplies<>, or std::divides<>
 		 * \tparam S		SIMD instruction set (SSE, AVX, AVX512)
-		 * \tparam threads	Number of threads used in parallel execution
+		 * \tparam K	Kernel policy defining cache blocking sizes
 		 *
 		 * \param A		Matrix A as array of M row pointers, each of size N
 		 * \param B		Matrix B as array of M row pointers, each of size N
@@ -1287,10 +1259,8 @@ namespace damm
 		 * \param M		Number of rows
 		 * \param N		Number of columns
 		 *
-		 * \note Matrices must have the same dimensions (MÃ—N).
-		 * \note Asymmetric matrices (M â‰  N) are supported.
-		 * \note Strides not aligned with SIMD block sizes are safely handled.
-		 * \note 2D interface maintained while leveraging SIMD optimizations internally.
+		 * \note Matrices must have the same dimensions (M x N).
+		 * \note Asymmetric matrices (M x N) are supported.
 		 */
 		template<FusionPolicy P, typename T, typename O1, typename O2, typename S, template<typename, typename> class K>
 		requires 
@@ -1310,11 +1280,11 @@ namespace damm
 		{
 			using kernel = K<T, S>;
 			using blocking = typename kernel::blocking;
-	constexpr size_t tile_rows = kernel::kernel_rows();
-	constexpr size_t tile_cols = kernel::kernel_cols();
-	
-	constexpr size_t l2_block = blocking::l2_block;
-	constexpr size_t l3_block = blocking::l3_block;
+			constexpr size_t tile_rows = kernel::kernel_rows();
+			constexpr size_t tile_cols = kernel::kernel_cols();
+			
+			constexpr size_t l2_block = blocking::l2_block;
+			constexpr size_t l3_block = blocking::l3_block;
 
 			const size_t simd_rows = M - (M % tile_rows);
 			const size_t simd_cols = N - (N % tile_cols);
@@ -1397,7 +1367,7 @@ namespace damm
 		 * \tparam O2			Second binary operator (e.g., std::plus<>, std::multiplies<>)
 		 * \tparam S			SIMD instruction set to use (SSE, AVX, AVX512, or NONE)
 		 * \tparam block_size	Size of square blocks for cache optimization (default: _block_size)
-		 * \tparam threads		Number of threads for parallel execution (default: _threads)
+		 * \tparam K			Kernel policy defining cache blocking sizes
 		 *
 		 * \param A		Matrix A as array of M row pointers, each of size N
 		 * \param B		Matrix B as array of M row pointers, each of size N
@@ -1408,7 +1378,7 @@ namespace damm
 		 *
 		 * \note All matrices must be allocated as contiguous memory blocks accessible
 		 *       through the 2D pointer interface. Submatrix views are not supported.
-		 * \note Non-square matrices and asymmetric dimensions (M â‰  N) are fully supported.
+		 * \note Non-square matrices and asymmetric dimensions (M x N) are fully supported.
 		 * \note When S=NONE, the function uses standard blocked operations without SIMD.
 		 * \note SIMD implementations automatically handle non-aligned dimensions with scalar fallback.
 		 * \note Enables comprehensive BLAS-style ternary operations with configurable precedence.

@@ -85,7 +85,7 @@ The operators could be specialized to BLAS-named functions:
 									 const size_t M, const size_t N) -> void {
 			auto x_mat = view_as_2D(x, M, 1);
 			auto y_mat = view_as_2D(y, 1, N);
-			auto outer_prod = aligned_alloc_2D<T, static_cast<size_t>(S)>(M, N);
+			auto outer_prod = aligned_alloc_2D<T, S::bytes>(M, N);
 			
 			multiply<T, S>(x_mat.get(), y_mat.get(), outer_prod.get(), M, 1, N);
 			scalar::unite<T, std::multiplies<>, S>(
@@ -108,7 +108,7 @@ The operators could be specialized to BLAS-named functions:
 		 * \brief Symmetric matrix multiply: C = A*A^T
 		 */
 		static constexpr auto syrk = [](matrix_t A, matrix_t C, const size_t M, const size_t N) -> void {
-			auto A_T = aligned_alloc_2D<T, static_cast<size_t>(S)>(N, M);
+			auto A_T = aligned_alloc_2D<T, S::bytes>(N, M);
 			transpose<T, S>(A, A_T.get(), M, N);
 			multiply<T, S>(A, A_T.get(), C, M, N, M);
 		};
@@ -257,4 +257,4 @@ template<typename T> using dblas = damm::it<T, AVX512>;///< BLAS-like environmen
 
 ## Parallel Scaling
 
-DAMM is capable of parallel computation on its operational kernels with OpenMPI. Compile with flags -fopenmp and -lgomp for parallelization or omit the flags to avoid parallel region overheads if operating without parallelization.
+DAMM is capable of parallel computation on its operational kernels with OpenMP. Compile with flags -fopenmp and -lgomp for parallelization or omit the flags to avoid parallel region overheads if operating without parallelization.

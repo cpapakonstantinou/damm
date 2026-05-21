@@ -34,7 +34,7 @@
 
 namespace damm
 {
-	/** \brief kernal for transpose_block. Low level function not intended for the public API*/
+	/** \brief kernal for transpose_block. Low level function not intended for the public API */
 	template <typename T>
 	inline __attribute__((always_inline))
 	void
@@ -50,16 +50,15 @@ namespace damm
 	 *
 	 * This function performs a block-wise transpose of a matrix  A into  B,
 	 * optimizing for cache locality and enabling multithreaded execution. It operates
-	 * on matrix views that provide 2D access (e.g., row-major pointer-to-pointer layout),
-	 * typically created from contiguous memory.
+	 * on matrix views that provide 2D access in contiguous row major format.
 	 *
-	 * \tparam T			Element type of the matrices (e.g., float, double).
-	 * \tparam K			Kernel policy defining tile size.
+	 * \tparam T	Element type of the matrices (e.g., float, double).
+	 * \tparam K	Kernel policy defining tile size.
 	 *
-	 * \param A Source matrix view with dimensions M × N.
-	 * \param B Destination matrix view with dimensions N × M.
-	 * \param M Number of rows in matrix A.
-	 * \param N Number of columns in matrix A.
+	 * \param A 	Source matrix view with dimensions M × N.
+	 * \param B 	Destination matrix view with dimensions N × M.
+	 * \param M 	Number of rows in matrix A.
+	 * \param N 	Number of columns in matrix A.
 	 *
 	 * \note Both  A and  B must be valid 2D views over contiguous row-major memory.
 	 *       This function assumes full allocation, not submatrices.
@@ -506,12 +505,7 @@ namespace damm
 		// Compute SIMD-processable dimensions (must be multiples of tile size)
 		const size_t simd_M = M - (M % tile_rows);
 		const size_t simd_N = N - (N % tile_cols);
-		
-		// Three-level cache blocking with micro-kernel tiling
-		// - Parallel over I (M dimension): Each thread gets row panel of A
-		// - L2 over J (N dimension): Column panel of A
-		// - L1: Inner blocking for cache optimization
-		
+			
 		#pragma omp parallel 
 		{
 			for (size_t i_block = 0; i_block < simd_M; i_block += l2_block)
@@ -577,9 +571,9 @@ namespace damm
 	 * matrix B, where B[j][i] = A[i][j]. The implementation uses cache-aware
 	 * blocking and optional SIMD acceleration for optimal performance.
 	 *
-	 * \tparam T			Element type of the matrices (e.g., float, double).
-	 * \tparam S			SIMD instruction set to use (SSE, AVX, AVX512, or NONE).
-	 * \tparam K			Kernel policy defining tile size (default: transpose_kernel from simd.h).
+	 * \tparam T	Element type of the matrices (e.g., float, double).
+	 * \tparam S	SIMD instruction set to use (SSE, AVX, AVX512, or NONE).
+	 * \tparam K	Kernel policy defining tile size (default: transpose_kernel from simd.h).
 	 *
 	 * \param A		Source matrix of dimensions M×N in row-major layout.
 	 * \param B		Destination matrix of dimensions N×M in row-major layout.
@@ -588,7 +582,7 @@ namespace damm
 	 *
 	 * \note Both matrices must be allocated as contiguous memory blocks accessible
 	 *       through the 2D pointer interface. Submatrix views are not supported.
-	 * \note Asymmetric matrices (M ≠ N) are fully supported.
+	 * \note Asymmetric matrices (M != N) are fully supported.
 	 * \note When S=NONE, the function uses standard blocked transpose without SIMD.
 	 * \note SIMD implementations handle non-aligned dimensions with scalar fallback.
 	 *

@@ -96,8 +96,8 @@ namespace damm
 		// L1 blocking: Elements to process at once
 		static consteval size_t _l1_block() 
 		{
-			constexpr size_t kernel_elements = kernel_rows * kernel_cols * sizeof(T); // bytes in C tile
-			constexpr size_t kernel_chunk = kernel_rows * sizeof(T) + kernel_cols * sizeof(T); // bytes per K iteration
+			constexpr size_t kernel_elements = kernel_rows * kernel_cols * sizeof(T); // bytes in tile
+			constexpr size_t kernel_chunk = kernel_rows * sizeof(T) + kernel_cols * sizeof(T); // bytes per iteration
 			constexpr size_t l1_fill = cache_info::l1_size*l1_fill_factor;
 			
 			if constexpr (kernel_chunk == 0 || l1_fill <= kernel_elements) 
