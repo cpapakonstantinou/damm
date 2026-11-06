@@ -506,7 +506,7 @@ namespace damm
 			}
 
 			const size_t rem_rows = M % tile_rows;
-			const size_t rem_cols = M % tile_cols;
+			const size_t rem_cols = N % tile_cols;
 
 			// Handle remainders with scalar fallback
 			if (rem_rows != 0)
@@ -815,7 +815,7 @@ namespace damm
 			}
 
 			const size_t rem_rows = M % tile_rows;
-			const size_t rem_cols = M % tile_cols;
+			const size_t rem_cols = N % tile_cols;
 
 			// Handle remainders
 			if (rem_rows != 0)
@@ -1314,7 +1314,7 @@ namespace damm
 			}
 
 			const size_t rem_rows = M % tile_rows;
-			const size_t rem_cols = M % tile_cols;
+			const size_t rem_cols = N % tile_cols;
 
 			// Handle remainders
 			if (rem_rows != 0)
