@@ -10,8 +10,39 @@
 #include <complex>
 #include <format>
 #include <cstring>
+#include <vector>
+#include <limits>
+#include <cmath>
 
 using namespace damm;
+
+
+template<typename T>
+bool is_accurate(const char* name, T** A, T** B, T** C, const size_t M, const size_t N, const size_t P)
+{
+	using R = typename base<T>::type;
+	using L = std::conditional_t<std::is_floating_point_v<T>, long double, std::complex<long double>>;
+	long double max_ref = 0, max_err = 0;
+	std::vector<L> ref(M * P, L(0));
+	for (size_t i = 0; i < M; ++i)
+		for (size_t k = 0; k < N; ++k)
+		{
+			const L a = L(A[i][k]);
+			for (size_t j = 0; j < P; ++j)
+				ref[i * P + j] += a * L(B[k][j]);
+		}
+	for (size_t i = 0; i < M; ++i)
+		for (size_t j = 0; j < P; ++j)
+		{
+			max_ref = std::max(max_ref, (long double)std::abs(ref[i * P + j]));
+			max_err = std::max(max_err, (long double)std::abs(L(C[i][j]) - ref[i * P + j]));
+		}
+	const long double u = std::numeric_limits<R>::epsilon() / 2;
+	const long double tol = 4.0L * std::sqrt((long double)N) * u * max_ref;
+	const bool ok = max_err <= tol;
+	printf("[%-4s] %s max|err| = %.3Le (tol %.3Le)\n", ok ? "OK" : "FAIL", name, max_err, tol);
+	return ok;
+}
 
 template<typename T>
 bool
@@ -47,13 +78,11 @@ test_all_ops(const size_t M, const size_t N, const size_t P)
 
 	multiply<T, AVX512>(A.get(), B.get(), C_avx512.get(), M, N, P);
 
-	ret &= is_same<T>(std::format("multiply<{},{}>:", typeid(T).name(), "NONE").c_str(), C_ref.get(), C_none.get(), M, P);
-	
-	ret &= is_same<T>(std::format("multiply<{},{}>:", typeid(T).name(), "SSE").c_str(), C_ref.get(), C_sse.get(), M, P);
-
-	ret &= is_same<T>(std::format("multiply<{},{}>:", typeid(T).name(), "AVX").c_str(), C_ref.get(), C_avx.get(), M, P);
-
-	ret &= is_same<T>(std::format("multiply<{},{}>:", typeid(T).name(), "AVX512").c_str(), C_ref.get(), C_avx512.get(), M, P);
+	ret &= is_accurate<T>(std::format("multiply<{},{}>:", typeid(T).name(), "naive").c_str(), A.get(), B.get(), C_ref.get(), M, N, P);
+	ret &= is_accurate<T>(std::format("multiply<{},{}>:", typeid(T).name(), "NONE").c_str(), A.get(), B.get(), C_none.get(), M, N, P);
+	ret &= is_accurate<T>(std::format("multiply<{},{}>:", typeid(T).name(), "SSE").c_str(), A.get(), B.get(), C_sse.get(), M, N, P);
+	ret &= is_accurate<T>(std::format("multiply<{},{}>:", typeid(T).name(), "AVX").c_str(), A.get(), B.get(), C_avx.get(), M, N, P);
+	ret &= is_accurate<T>(std::format("multiply<{},{}>:", typeid(T).name(), "AVX512").c_str(), A.get(), B.get(), C_avx512.get(), M, N, P);
 
 	return ret;
 }

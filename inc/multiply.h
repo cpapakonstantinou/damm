@@ -178,51 +178,46 @@ namespace damm
 		
 		const size_t col_real = col * 2;
 		
-		register_t sign_mask = alternating_sign_mask_odd<real_t, S>();
-		
 		alignas(S::bytes) register_t c_accum[row_regs][col_regs];
 		static_for<row_regs>([&]<auto i>()
 		{
 			static_for<col_regs>([&]<auto j>()
 			{
-				c_accum[i][j] = _loadu<real_t, S>(&C_real[row + i][col_real + j * SIMD_WIDTH]);
+				c_accum[i][j] = _set1<real_t, S>(real_t(0));
 			});
 		});
-		
+
 		for (size_t k = k_start; k < k_end; ++k)
 		{
 			alignas(S::bytes) register_t b_vecs[col_regs];
 			alignas(S::bytes) register_t b_swapped[col_regs];
-			
-			static_for<col_regs>([&]<auto j>() 
+
+			static_for<col_regs>([&]<auto j>()
 			{
 				b_vecs[j] = _loadu<real_t, S>(&B_real[k][col_real + j * SIMD_WIDTH]);
 				b_swapped[j] = swap_adjacent_pairs<real_t, S>(b_vecs[j]);
 			});
-			
-			static_for<row_regs>([&]<auto i>() 
+
+			static_for<row_regs>([&]<auto i>()
 			{
 				const size_t a_idx = (row + i) * 2;
-				const real_t a_r = packed_A_real[k][a_idx + 0];
-				const real_t a_i = packed_A_real[k][a_idx + 1];
-				
-				register_t a_r_vec = _set1<real_t, S>(a_r);
-				register_t a_i_vec = _set1<real_t, S>(a_i);
-				register_t a_i_signed = _mul<real_t, S>(a_i_vec, sign_mask);
-				
-				static_for<col_regs>([&]<auto j>() 
+				const register_t a_r_vec = _set1<real_t, S>(packed_A_real[k][a_idx + 0]);
+				const register_t a_i_vec = _set1<real_t, S>(packed_A_real[k][a_idx + 1]);
+
+				static_for<col_regs>([&]<auto j>()
 				{
-					c_accum[i][j] = _fmadd<real_t, S>(a_r_vec, b_vecs[j], c_accum[i][j]);
-					c_accum[i][j] = _fmadd<real_t, S>(a_i_signed, b_swapped[j], c_accum[i][j]);
+					register_t t = _fmaddsub<real_t, S>(a_i_vec, b_swapped[j], c_accum[i][j]);
+					c_accum[i][j] = _fmaddsub<real_t, S>(a_r_vec, b_vecs[j], t);
 				});
 			});
 		}
-		
+
 		static_for<row_regs>([&]<auto i>()
 		{
 			static_for<col_regs>([&]<auto j>()
 			{
-				_storeu<real_t, S>(&C_real[row + i][col_real + j * SIMD_WIDTH], c_accum[i][j]);
+				real_t* c = &C_real[row + i][col_real + j * SIMD_WIDTH];
+				_storeu<real_t, S>(c, _add<real_t, S>(_loadu<real_t, S>(c), c_accum[i][j]));
 			});
 		});
 	}
