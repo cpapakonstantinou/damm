@@ -31,6 +31,7 @@
 #include <damm_kernels.h>
 #include <omp.h>
 #include <transpose.h>
+#include <cstring>
 
 namespace damm
 {
@@ -137,12 +138,12 @@ namespace damm
 			alignas(S::bytes) register_t b_vecs[col_regs];
 			static_for<col_regs>([&]<auto j>() 
 			{
-				b_vecs[j] = _loadu<T, S>(&B[k][col + j * SIMD_WIDTH]);
+				b_vecs[j] = _loadu<T, S>(&B[col / (col_regs * SIMD_WIDTH)][(k * col_regs + j) * SIMD_WIDTH]);
 			});
 			
 			static_for<row_regs>([&]<auto i>() 
 			{
-				register_t a_broadcast = _set1<T, S>(At[k][row + i]);
+				register_t a_broadcast = _set1<T, S>(At[row / row_regs][k * row_regs + i]);
 				
 				static_for<col_regs>([&]<auto j>() 
 				{
@@ -194,15 +195,15 @@ namespace damm
 
 			static_for<col_regs>([&]<auto j>()
 			{
-				b_vecs[j] = _loadu<real_t, S>(&B_real[k][col_real + j * SIMD_WIDTH]);
+				b_vecs[j] = _loadu<real_t, S>(&B_real[col_real / (col_regs * SIMD_WIDTH)][(k * col_regs + j) * SIMD_WIDTH]);
 				b_swapped[j] = swap_adjacent_pairs<real_t, S>(b_vecs[j]);
 			});
 
 			static_for<row_regs>([&]<auto i>()
 			{
-				const size_t a_idx = (row + i) * 2;
-				const register_t a_r_vec = _set1<real_t, S>(packed_A_real[k][a_idx + 0]);
-				const register_t a_i_vec = _set1<real_t, S>(packed_A_real[k][a_idx + 1]);
+				const size_t a_idx = (k * row_regs + i) * 2;
+				const register_t a_r_vec = _set1<real_t, S>(packed_A_real[row / row_regs][a_idx + 0]);
+				const register_t a_i_vec = _set1<real_t, S>(packed_A_real[row / row_regs][a_idx + 1]);
 
 				static_for<col_regs>([&]<auto j>()
 				{
@@ -263,8 +264,19 @@ namespace damm
 		const size_t simd_N = N - (N % kernel_rows);
 		const size_t simd_P = P - (P % kernel_cols);
 
-		auto At = aligned_alloc_2D<T, S::bytes>(N, M);
-		transpose<T, S>(A, At.get(), M, N);
+		auto At = aligned_alloc_2D<T, S::bytes>(std::max<size_t>(simd_M / kernel_rows, 1), N * kernel_rows);
+		auto Bp = aligned_alloc_2D<T, S::bytes>(std::max<size_t>(simd_P / kernel_cols, 1), N * kernel_cols);
+
+		#pragma omp parallel for schedule(static)
+		for (size_t p = 0; p < simd_M / kernel_rows; ++p)
+			for (size_t k = 0; k < N; ++k)
+				for (size_t i = 0; i < kernel_rows; ++i)
+					At[p][k * kernel_rows + i] = A[p * kernel_rows + i][k];
+
+		#pragma omp parallel for schedule(static)
+		for (size_t q = 0; q < simd_P / kernel_cols; ++q)
+			for (size_t k = 0; k < N; ++k)
+				std::memcpy(&Bp[q][k * kernel_cols], &B[k][q * kernel_cols], kernel_cols * sizeof(T));
 	
 		#pragma omp parallel
 		{			
@@ -290,7 +302,7 @@ namespace damm
 							for (size_t j = 0; j < (j_end - j_block); j += kernel_cols)
 							{
 								_multiply_block_simd<T, S, K>(
-											At.get(), B, C,
+											At.get(), Bp.get(), C,
 											i_block + i,      // row
 											j_block + j,      // col
 											k_block, k_end    // k_start, k_end
